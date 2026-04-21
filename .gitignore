@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Data & models (too large / regenerable)
+data/
+models/
+*.pkl
+*.joblib
+*.h5
+*.parquet
+
+# Local/IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Secrets
+.env
+.env.*
+*.key
+
+# Nested clone (repo root is the parent directory)
+hurricane-food-relief-ml/
