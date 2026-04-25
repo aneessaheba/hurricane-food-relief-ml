@@ -300,30 +300,110 @@ def download_storm_events(years: Iterable[int] = (2017, 2018, 2019, 2020, 2021, 
     return out
 
 
+_NFHL_STATE_BBOX = {
+    # xmin, ymin, xmax, ymax  (WGS84)
+    "48": (-106.65, 25.84, -93.51, 36.50),  # TX
+    "22": (-94.04,  28.92, -88.82, 33.02),  # LA
+    "12": (-87.63,  24.52, -80.03, 31.00),  # FL
+    "37": (-84.32,  33.84, -75.46, 36.59),  # NC
+    "45": (-83.35,  32.04, -78.54, 35.22),  # SC
+    "13": (-85.61,  30.36, -80.84, 35.00),  # GA
+    "01": (-88.47,  30.14, -84.89, 35.01),  # AL
+    "28": (-91.65,  30.17, -88.10, 35.01),  # MS
+}
+
+
 def download_nfhl_state(state_fips: str, force: bool = False) -> Optional[Path]:
     """
-    Query the NFHL ArcGIS REST endpoint for SFHA polygons in a given state.
-    Returns a GeoJSON path. For a real build, iterate county-by-county to
-    avoid the 1000-record soft cap. This helper does a coarse state pull.
+    Query the NFHL ArcGIS REST endpoint for SFHA polygons in a given state,
+    paginating at 2000 records per page (server hard limit).
+
+    Uses a bounding-box spatial filter (spatially indexed) rather than a
+    DFIRM_ID LIKE filter (non-indexed string scan that causes 500 timeouts).
     """
+    import json as _json
     dest = RAW / f"nfhl_sfha_{state_fips}.geojson"
+
+    # Load any previously saved (partial) data so we can resume
+    all_features = []
+    crs = None
     if dest.exists() and not force:
-        return dest
-    params = {
-        "where": "FLD_ZONE IN ('A','AE','AH','AO','V','VE') "
-                 f"AND STATE_FIPS='{state_fips}'",
-        "outFields": "FLD_ZONE,STATE_FIPS,COUNTY_FIPS",
+        try:
+            cached = _json.loads(dest.read_bytes())
+            if "error" in cached or "type" not in cached:
+                dest.unlink()
+            elif cached.get("complete"):
+                return dest  # already fully downloaded
+            else:
+                all_features = cached.get("features", [])
+                crs = cached.get("crs")
+                print(f"  state {state_fips}: resuming from {len(all_features)} cached features")
+        except Exception:
+            dest.unlink()
+
+    bbox = _NFHL_STATE_BBOX.get(state_fips)
+    if bbox is None:
+        print(f"[warn] No bounding box defined for state FIPS {state_fips}")
+        return None
+
+    xmin, ymin, xmax, ymax = bbox
+    base_params = {
+        "where": "SFHA_TF='T'",
+        "geometry": f"{xmin},{ymin},{xmax},{ymax}",
+        "geometryType": "esriGeometryEnvelope",
+        "spatialRel": "esriSpatialRelIntersects",
+        "inSR": 4326,
+        "outFields": "FLD_ZONE,ZONE_SUBTY,SFHA_TF,DFIRM_ID",
         "outSR": 4326,
+        "geometryPrecision": 5,
         "f": "geojson",
         "resultRecordCount": 2000,
     }
-    try:
-        r = requests.get(API_ENDPOINTS["nfhl_rest"], params=params, timeout=300)
-        r.raise_for_status()
-        dest.write_bytes(r.content)
-    except Exception as e:
-        print(f"[warn] NFHL fetch for state {state_fips} failed: {e}")
+
+    complete = False
+    offset = len(all_features)
+    while True:
+        try:
+            params = {**base_params, "resultOffset": offset}
+            r = requests.get(API_ENDPOINTS["nfhl_rest"], params=params, timeout=300)
+            r.raise_for_status()
+            page = r.json()
+        except Exception as e:
+            print(f"\n[warn] NFHL page failed for state {state_fips} at offset={offset}: {e}")
+            break
+        if "error" in page:
+            print(f"\n[warn] NFHL API error for state {state_fips} offset={offset}: {page['error']}")
+            break
+        features = page.get("features", [])
+        if not features:
+            complete = True
+            break
+        all_features.extend(features)
+        if crs is None:
+            crs = page.get("crs")
+        print(f"  state {state_fips}: fetched {len(all_features)} features...", end="\r")
+        if len(features) < 2000:
+            complete = True
+            break
+        offset += 2000
+        # Save after each successful page so progress survives crashes
+        geojson = {"type": "FeatureCollection", "features": all_features}
+        if crs:
+            geojson["crs"] = crs
+        dest.write_text(_json.dumps(geojson), encoding="utf-8")
+
+    if not all_features:
+        print(f"[warn] NFHL: no features returned for state {state_fips}")
         return None
+
+    geojson = {"type": "FeatureCollection", "features": all_features}
+    if crs:
+        geojson["crs"] = crs
+    if complete:
+        geojson["complete"] = True
+    dest.write_text(_json.dumps(geojson), encoding="utf-8")
+    status = "complete" if complete else f"partial ({len(all_features)} features)"
+    print(f"  state {state_fips}: {status} -> {dest.name}")
     return dest
 
 

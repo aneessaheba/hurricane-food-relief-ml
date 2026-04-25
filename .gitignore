@@ -17,10 +17,14 @@ models/
 *.h5
 *.parquet
 
+# Large generated outputs (regenerable from notebooks)
+outputs/priority_rankings.csv
+
 # Local/IDE
 .vscode/
 .idea/
 .DS_Store
+.claude/
 
 # Secrets
 .env

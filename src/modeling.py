@@ -24,7 +24,8 @@ from sklearn.metrics import (
 from sklearn.model_selection import GridSearchCV, StratifiedGroupKFold
 from sklearn.naive_bayes import GaussianNB
 from sklearn.preprocessing import OneHotEncoder, RobustScaler
-from sklearn.svm import SVC
+from sklearn.calibration import CalibratedClassifierCV
+from sklearn.svm import SVC, LinearSVC
 
 from config import (
     RANDOM_STATE, CONTINUOUS_FEATURES, BINARY_FEATURES, CATEGORICAL_FEATURES,
@@ -70,13 +71,20 @@ def get_classifiers() -> Dict[str, object]:
             n_estimators=200, max_features="sqrt", class_weight="balanced",
             min_samples_leaf=2, random_state=RANDOM_STATE, n_jobs=-1,
         ),
-        "svm": SVC(kernel="rbf", probability=True, class_weight="balanced",
-                   random_state=RANDOM_STATE),
+        # RBF SVC is O(n^2) and impractical after SMOTE inflates the train set.
+        # Use LinearSVC (still an SVM) wrapped in CalibratedClassifierCV so
+        # predict_proba is available for the downstream priority index.
+        "svm": CalibratedClassifierCV(
+            LinearSVC(C=1.0, class_weight="balanced", dual="auto",
+                      max_iter=5000, random_state=RANDOM_STATE),
+            method="sigmoid", cv=3,
+        ),
         "nb": GaussianNB(),
+        # saga converges much faster than lbfgs on this (post-OHE sparse-ish) matrix.
         "lr": LogisticRegression(
-            solver="lbfgs", C=1.0,
-            max_iter=1000, class_weight="balanced",
-            random_state=RANDOM_STATE,
+            solver="saga", penalty="l2", C=1.0,
+            max_iter=5000, class_weight="balanced",
+            random_state=RANDOM_STATE, n_jobs=-1,
         ),
     }
     if xgb is not None:
