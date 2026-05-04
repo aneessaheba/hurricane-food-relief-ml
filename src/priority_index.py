@@ -23,7 +23,7 @@ from sklearn.preprocessing import MinMaxScaler
 # Components where a HIGHER raw value means MORE fragile
 FRAGILITY_HIGHER_IS_WORSE = [
     "dist_nearest_supermarket_mi",
-    "snap_participation_pct",
+    "snap_households_avg",
     "svi_overall",
 ]
 # Components where a HIGHER raw value means LESS fragile (inverted)

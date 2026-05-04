@@ -25,25 +25,45 @@ for _p in DATA_PATHS.values():
 # Hurricanes in scope (temporal split)
 # -----------------------------------------------------------------------------
 HURRICANE_META = [
+    # ── TRAIN: 2016–2018 ─────────────────────────────────────────
+    {"name": "Matthew",  "year": 2016, "disaster_number": 4283, "category": 5,
+     "max_wind_kt": 145, "states_affected": ["FL","GA","SC","NC"], "split": "TRAIN"},
     {"name": "Harvey",   "year": 2017, "disaster_number": 4332, "category": 4,
-     "max_wind_kt": 115, "states_affected": ["TX"],       "split": "TRAIN"},
+     "max_wind_kt": 115, "states_affected": ["TX"],            "split": "TRAIN"},
+    {"name": "Irma",     "year": 2017, "disaster_number": 4337, "category": 4,
+     "max_wind_kt": 155, "states_affected": ["FL","GA","SC"],  "split": "TRAIN"},
     {"name": "Florence", "year": 2018, "disaster_number": 4393, "category": 1,
-     "max_wind_kt": 80,  "states_affected": ["NC", "SC"], "split": "TRAIN"},
+     "max_wind_kt": 80,  "states_affected": ["NC","SC"],       "split": "TRAIN"},
     {"name": "Michael",  "year": 2018, "disaster_number": 4399, "category": 5,
-     "max_wind_kt": 140, "states_affected": ["FL"],       "split": "TRAIN"},
-    # Dorian excluded: FEMA Housing Assistance has no zip-level records for
-    # disaster 4465 (most damage was in the Bahamas; limited U.S. impact).
+     "max_wind_kt": 140, "states_affected": ["FL"],            "split": "TRAIN"},
+    # Dorian excluded: FEMA HA has no zip-level records for DR 4465.
+
+    # ── VAL: 2020 season ─────────────────────────────────────────
     {"name": "Laura",    "year": 2020, "disaster_number": 4559, "category": 4,
-     "max_wind_kt": 130, "states_affected": ["LA"],       "split": "VAL"},
+     "max_wind_kt": 130, "states_affected": ["LA"],            "split": "VAL"},
+    {"name": "Sally",    "year": 2020, "disaster_number": 4563, "category": 2,
+     "max_wind_kt": 90,  "states_affected": ["AL","FL"],       "split": "VAL"},
     {"name": "Delta",    "year": 2020, "disaster_number": 4570, "category": 2,
-     "max_wind_kt": 85,  "states_affected": ["LA"],       "split": "VAL"},
+     "max_wind_kt": 85,  "states_affected": ["LA"],            "split": "VAL"},
+    {"name": "Zeta",     "year": 2020, "disaster_number": 4577, "category": 3,
+     "max_wind_kt": 100, "states_affected": ["LA","MS","AL"],  "split": "VAL"},
+
+    # ── TEST: 2021–2024 ──────────────────────────────────────────
     {"name": "Ida",      "year": 2021, "disaster_number": 4611, "category": 4,
-     "max_wind_kt": 130, "states_affected": ["LA"],       "split": "TEST"},
+     "max_wind_kt": 130, "states_affected": ["LA"],            "split": "TEST"},
+    # Nicholas (4623) excluded — FEMA HA/IHP returned 0 records (no FEMA Individual
+    # Assistance was activated; storm caused mostly commercial wind damage).
     {"name": "Ian",      "year": 2022, "disaster_number": 4673, "category": 4,
-     "max_wind_kt": 140, "states_affected": ["FL"],       "split": "TEST"},
+     "max_wind_kt": 140, "states_affected": ["FL"],            "split": "TEST"},
+    {"name": "Idalia",   "year": 2023, "disaster_number": 4734, "category": 3,
+     "max_wind_kt": 110, "states_affected": ["FL","GA","SC"],  "split": "TEST"},
+    {"name": "Helene",   "year": 2024, "disaster_number": 4830, "category": 4,
+     "max_wind_kt": 120, "states_affected": ["FL","GA","NC","SC","TN"], "split": "TEST"},
+    {"name": "Milton",   "year": 2024, "disaster_number": 4834, "category": 3,
+     "max_wind_kt": 110, "states_affected": ["FL"],            "split": "TEST"},
 ]
 
-STATES_IN_SCOPE = ["TX", "LA", "FL", "NC", "SC", "GA", "AL", "MS"]
+STATES_IN_SCOPE = ["TX", "LA", "FL", "NC", "SC", "GA", "AL", "MS", "TN", "VA"]
 
 # -----------------------------------------------------------------------------
 # Data source URLs / endpoints
@@ -72,6 +92,9 @@ DOWNLOAD_URLS = {
     "hud_tract_zip": "https://www.huduser.gov/portal/datasets/usps/TRACT_ZIP_032024.xlsx",
     # TIGER/Line ZCTA 2020
     "zcta_shapefile": "https://www2.census.gov/geo/tiger/TIGER2022/ZCTA520/tl_2022_us_zcta520.zip",
+    # FEMA National Risk Index — pre-aggregated zip-level flood/hazard scores.
+    # Replaces the unreliable NFHL polygon overlay. Direct CSV bundle.
+    "fema_nri_tract": "https://opendata.arcgis.com/api/v3/datasets/9da4eeb936544335a6db0cd7a8448a51_0/downloads/data?format=csv&spatialRefId=4326",
     # NOAA Storm Events bulk — user fills in specific year CSV files
     "noaa_storm_events_base": "https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/",
 }
@@ -115,9 +138,9 @@ FEATURE_GROUPS = {
     ],
     "food_access": [
         "food_desert_flag", "snap_retailer_count", "snap_retailers_per_1k",
-        "dist_nearest_supermarket_mi", "snap_participation_pct",
+        "dist_nearest_supermarket_mi", "snap_households_avg",
     ],
-    "flood": ["pct_in_100yr_floodplain"],
+    "flood": ["pct_in_100yr_floodplain", "nri_cflood_score", "nri_hrcn_score"],
     "storm": [
         "hurricane_category", "max_wind_speed_kt",
         "total_rainfall_inches", "distance_to_track_km",
@@ -137,7 +160,7 @@ CONTINUOUS_FEATURES = (
     FEATURE_GROUPS["demographics"]
     + FEATURE_GROUPS["svi"]
     + ["snap_retailer_count", "snap_retailers_per_1k",
-       "dist_nearest_supermarket_mi", "snap_participation_pct"]
+       "dist_nearest_supermarket_mi", "snap_households_avg"]
     + FEATURE_GROUPS["flood"]
     + ["max_wind_speed_kt", "total_rainfall_inches", "distance_to_track_km"]
 )

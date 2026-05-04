@@ -257,6 +257,19 @@ def download_hud_crosswalk(force: bool = False) -> Path:
     )
 
 
+def download_fema_nri_tract(force: bool = False) -> Optional[Path]:
+    """FEMA National Risk Index — census-tract-level CSV via FEMA's ArcGIS
+    Hub mirror (zip-level was discontinued in 2025). We aggregate to ZIP
+    downstream via the HUD tract->zip crosswalk in notebook 03."""
+    url = DOWNLOAD_URLS.get("fema_nri_tract")
+    if not url:
+        return None
+    out_csv = RAW / "fema_nri_tract.csv"
+    if out_csv.exists() and not force:
+        return out_csv
+    return download_file(url, out_csv, force=force)
+
+
 def download_zcta_shapefile(force: bool = False) -> Path:
     zpath = RAW / "zcta.zip"
     out_dir = RAW / "zcta"
@@ -447,10 +460,13 @@ def download_all(census_key: Optional[str] = None, force: bool = False) -> None:
     download_zcta_shapefile(force=force)
     print("\n=== 11. NOAA Storm Events (validation) ===")
     download_storm_events(force=force)
-    print("\n=== 12. NFHL SFHA polygons (per state) ===")
-    # Rough FIPS map for scope states
+    print("\n=== 12. NFHL SFHA polygons (per state, best-effort) ===")
     state_fips = {"TX": "48", "LA": "22", "FL": "12", "NC": "37",
-                  "SC": "45", "GA": "13", "AL": "01", "MS": "28"}
+                  "SC": "45", "GA": "13", "AL": "01", "MS": "28",
+                  "TN": "47", "VA": "51"}
     for st in STATES_IN_SCOPE:
-        download_nfhl_state(state_fips[st], force=force)
+        if st in state_fips:
+            download_nfhl_state(state_fips[st], force=force)
+    print("\n=== 13. FEMA National Risk Index (census-tract level) ===")
+    _try("fema_nri_tract", download_fema_nri_tract, "fema_nri_tract.csv")
     print("\nAll downloads complete.")

@@ -61,7 +61,7 @@ def tract_to_zip(
         wsum = w.sum() or 1.0
         return pd.Series({c: np.nansum(g[c].to_numpy() * w) / wsum for c in value_cols})
 
-    out = merged.groupby("ZIP").apply(_wavg).reset_index()
+    out = merged.groupby("ZIP", group_keys=True).apply(_wavg, include_groups=False).reset_index()
     out = out.rename(columns={"ZIP": zip_col_out})
     return out
 
@@ -150,8 +150,13 @@ def compute_distance_to_track(
     zcta_gdf: gpd.GeoDataFrame, track: LineString,
     zip_col: str = "ZCTA5CE20",
 ) -> pd.DataFrame:
-    """Vectorized-ish per-zip distance to one storm's track."""
-    cents = zcta_gdf.to_crs(CRS_LATLON).geometry.centroid
+    """Vectorized-ish per-zip distance to one storm's track.
+
+    Centroids are computed in the projected equal-area CRS (EPSG:5070) and then
+    re-projected to lat/lon for the geodesic distance call — taking the centroid
+    in geographic CRS would silently distort polygons.
+    """
+    cents = zcta_gdf.to_crs(CRS_AREA).geometry.centroid.to_crs(CRS_LATLON)
     zips = zcta_gdf[zip_col].astype(str).str.zfill(5).to_numpy()
     out = []
     for z, c in tqdm(list(zip(zips, cents)), desc="dist_to_track"):
@@ -272,7 +277,20 @@ def merge_housing_assistance(
                 + _SHARED_COUNT_COLS
                 + list(_OWNER_SEVERITY.values())
                 + list(_RENTER_SEVERITY.values()))
-        return df[[c for c in keep if c in df.columns]]
+        df = df[[c for c in keep if c in df.columns]]
+
+        # CRITICAL: FEMA HA rows are keyed (disaster, state, county, zip).
+        # A single zip can span multiple counties, producing duplicate rows
+        # per (disaster, zip). Aggregate to (disaster, zip) BEFORE the merge
+        # so the outer join doesn't Cartesian-explode owner-county × renter-county.
+        numeric_cols = [c for c in df.columns if c not in (
+            "disasterNumber", "zipCode", "county", "state")]
+        agg = {c: "sum" for c in numeric_cols}
+        # Take the first non-null state/county label as a representative
+        if "state" in df.columns:  agg["state"] = "first"
+        if "county" in df.columns: agg["county"] = "first"
+        return (df.groupby(["disasterNumber", "zipCode"], as_index=False)
+                  .agg(agg))
 
     o = _clean(owners)
     r = _clean(renters)
