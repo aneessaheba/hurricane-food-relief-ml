@@ -1,0 +1,73 @@
+column,group,dtype,units,source,description
+disaster_number,identifier,int,—,FEMA,FEMA disaster declaration number (DR-XXXX) identifying the storm
+zip_code,identifier,string,—,—,5-digit ZIP Code Tabulation Area (ZCTA), zero-padded
+state,identifier,string,—,FEMA HA,US state postal abbreviation
+county,identifier,string,—,FEMA HA,County name (representative; some zips span multiple counties)
+total_inspected,target_input,float,count,FEMA HA Owners+Renters,Households whose property was physically inspected by a FEMA inspector (owners + renters summed)
+total_major_substantial,target_input,float,count,FEMA HA,Inspected households in Major or Substantial damage category (owners >$20k + renters major+substantial)
+total_no_damage,target_input,float,count,FEMA HA,Inspected households with no damage
+total_minor,target_input,float,count,FEMA HA,Inspected households in Minor damage category (owners $1-10k; renter schema has no minor bucket)
+total_moderate,target_input,float,count,FEMA HA,Inspected households in Moderate damage category
+total_approved_dollars,target_input,float,USD,FEMA HA,Total IHP dollars approved (owners + renters)
+validRegistrations,target_input,float,count,FEMA HA,Number of valid IHP registrations
+repairReplaceAmount,target_input,float,USD,FEMA HA,IHP repair/replace assistance approved
+rentalAmount,target_input,float,USD,FEMA HA,IHP rental assistance approved
+otherNeedsAmount,target_input,float,USD,FEMA HA,IHP Other Needs Assistance (ONA) approved
+NAME,demographic,string,—,Census ACS5,ZCTA descriptive name (e.g. "ZCTA5 70801")
+population,demographic,float,persons,Census ACS5 (B01003_001E),Total resident population
+median_income,demographic,float,USD,Census ACS5 (B19013_001E),Median household income
+poverty_count,demographic,float,persons,Census ACS5 (B17001_002E),Persons with income below the poverty level
+renters,demographic,float,households,Census ACS5 (B25003_003E),Renter-occupied housing units
+male_65_66,demographic,float,persons,Census ACS5 (B01001_020E),Males age 65-66
+male_67_69,demographic,float,persons,Census ACS5 (B01001_021E),Males age 67-69
+male_70_74,demographic,float,persons,Census ACS5 (B01001_022E),Males age 70-74
+male_75_79,demographic,float,persons,Census ACS5 (B01001_023E),Males age 75-79
+male_80_84,demographic,float,persons,Census ACS5 (B01001_024E),Males age 80-84
+male_85_over,demographic,float,persons,Census ACS5 (B01001_025E),Males age 85+
+female_65_66,demographic,float,persons,Census ACS5 (B01001_044E),Females age 65-66
+female_67_69,demographic,float,persons,Census ACS5 (B01001_045E),Females age 67-69
+female_70_74,demographic,float,persons,Census ACS5 (B01001_046E),Females age 70-74
+female_75_79,demographic,float,persons,Census ACS5 (B01001_047E),Females age 75-79
+female_80_84,demographic,float,persons,Census ACS5 (B01001_048E),Females age 80-84
+female_85_over,demographic,float,persons,Census ACS5 (B01001_049E),Females age 85+
+white_alone,demographic,float,persons,Census ACS5 (B02001_002E),Persons identifying as White alone (used to derive pct_minority = 1 - white/total)
+no_vehicle_households,demographic,float,households,Census ACS5 (B08201_002E),Households with no vehicle available
+mobile_homes,demographic,float,units,Census ACS5 (B25024_010E),Mobile-home housing units
+pct_poverty,demographic,float,percent,derived,Persons in poverty as % of population
+pct_renters,demographic,float,percent,derived,Renter-occupied units as % of households
+pct_elderly_65plus,demographic,float,percent,derived,Persons 65+ as % of population
+pct_minority,demographic,float,percent,derived,Non-White-alone as % of population
+pct_no_vehicle,demographic,float,percent,derived,No-vehicle households as % of households
+pct_mobile_homes,demographic,float,percent,derived,Mobile homes as % of housing units
+svi_socioeconomic,svi,float,0-1,CDC SVI 2022 (RPL_THEME1),Socioeconomic-status percentile rank (higher = more vulnerable)
+svi_household_comp,svi,float,0-1,CDC SVI 2022 (RPL_THEME2),Household composition & disability percentile
+svi_minority_lang,svi,float,0-1,CDC SVI 2022 (RPL_THEME3),Minority status & language percentile
+svi_housing_transport,svi,float,0-1,CDC SVI 2022 (RPL_THEME4),Housing type & transportation percentile
+svi_overall,svi,float,0-1,CDC SVI 2022 (RPL_THEMES),Overall social vulnerability percentile rank
+LILATracts_1And10,food_access,float,share,USDA Food Atlas,Tract-share share of LILA (Low-Income Low-Access) tracts at 1-mile/10-mile thresholds (post-aggregation)
+lalowi1,food_access,float,persons,USDA Food Atlas,Low-access low-income population at 1-mile threshold
+lahunv1share,food_access,float,share,USDA Food Atlas,Share of households without vehicle and >1mi from supermarket
+snap_participation_pct,food_access,float,percent,USDA Food Atlas,SNAP participation rate
+food_desert_flag,food_access,binary,0/1,derived,1 if LILATracts_1And10 >= 0.5 in zip's underlying tracts
+snap_retailer_count,food_access,float,count,USDA SNAP locator,Authorized SNAP retailers spatially within zip polygon
+dist_nearest_supermarket_mi,food_access,float,miles,derived,Geodesic distance from zip centroid to nearest "Super..." retailer
+distance_to_track_km,storm,float,km,IBTrACS + pyproj.Geod,Geodesic distance from zip centroid to nearest point on hurricane track
+pct_in_100yr_floodplain,flood_legacy,float,percent,FEMA NFHL (sparse),Share of zip area within SFHA flood zones (mostly missing in this build; superseded by NRI)
+nri_cflood_score,flood,float,0-100,FEMA NRI tract->zip,Coastal-flood risk score (CFLD_RISKS) aggregated to zip via HUD crosswalk
+nri_hrcn_score,flood,float,0-100,FEMA NRI tract->zip,Hurricane risk score (HRCN_RISKS) aggregated to zip via HUD crosswalk
+snap_retailers_per_1k,food_access,float,per 1k pop,derived,SNAP retailers per 1000 residents
+train_test_split,identifier,string,—,derived,TRAIN (2016-2018) / VAL (2020) / TEST (2021-2024)
+hurricane_name,identifier,string,—,config,Storm name (e.g. Harvey, Ian)
+hurricane_year,identifier,int,year,config,Storm season year
+hurricane_category,storm,int,1-5,config,Saffir-Simpson category at peak intensity
+max_wind_speed_kt,storm,int,knots,config,Maximum sustained wind speed at peak intensity
+verified_damage_per_1000,target,float,per 1k pop,derived,total_inspected / population * 1000 (primary continuous target)
+pct_major_substantial,target,float,percent,derived,total_major_substantial / total_inspected * 100
+approved_dollars_per_capita,target,float,USD/person,derived,total_approved_dollars / population
+damage_severity_class,target,string,Low/Medium/High/Severe,derived,Categorical bin of verified_damage_per_1000 using SEVERITY_BINS [-inf, 2, 8, 25, inf]
+food_data_missing,flag,int,0/1,derived,1 if any food_access feature was NaN before imputation
+food_fragility_score,derived_output,float,0-1,priority_index.py,MinMax-scaled composite of (food_desert_flag, dist_supermarket, no_vehicle, snap_density) — fit on TRAIN only
+prob_high_or_severe,derived_output,float,0-1,model output,P(class=High) + P(class=Severe) from best classifier
+food_relief_priority_index,derived_output,float,0-1,derived,prob_high_or_severe * food_fragility_score (raw)
+priority_index_norm,derived_output,float,0-1,derived,Normalized priority index (rescaled within hurricane)
+priority_rank,derived_output,int,1=top,derived,Per-hurricane rank by priority_index_norm
