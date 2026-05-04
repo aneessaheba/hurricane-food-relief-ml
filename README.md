@@ -36,35 +36,46 @@ Notebook 01 downloads ~5 GB and takes 1–3 hours (Irma's IHP file alone is 1.45
 
 ## Team setup (skip the long downloads)
 
-Teammates who just want to **inspect results, run the dashboard, or re-train on the prebuilt features** don't need to re-run notebook 01. Use the share-bundle workflow:
+Teammates who just want to **inspect results, run the dashboard, or re-train on the prebuilt features** don't need to re-run notebook 01. Run these four commands once:
 
 ```bash
+# 1. clone + env
 git clone https://github.com/ChaitanyaUppalapati/hurricane-food-relief-ml.git
 cd hurricane-food-relief-ml
-python -m venv .venv && source .venv/bin/activate
+python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-# Pull the prebuilt artifacts bundle (data/processed, models, priority_rankings.csv)
-# Get the share URL from your team owner (Google Drive / Dropbox / OneDrive).
-python scripts/fetch_share_bundle.py "<paste share URL here>"
+# 2. pull the prebuilt artifacts bundle (~21 MB zipped, 54 MB extracted)
+python scripts/fetch_share_bundle.py "https://drive.google.com/file/d/1d5kVJ-tmUWaTb7WS4ojIF4Bng0QAtabV/view?usp=sharing"
 
-# Now everything works without notebook 01:
-streamlit run app/streamlit_app.py
-# or
-jupyter lab            # re-run notebooks 02-08 against the cached artifacts
+# 3. inspect results — pick one
+streamlit run app/streamlit_app.py        # interactive dashboard with priority maps + SHAP
+jupyter lab                                # re-run any notebook against the cached artifacts
 ```
 
-The default bundle is ~25 MB (processed CSVs + trained model pickles + priority rankings).
-A `--full` bundle adds the raw FEMA/Census downloads (~5 GB) for full re-runnability.
+The bundle contains:
+- `data/processed/abt.csv` — analytic base table (5,522 zip × hurricane rows)
+- `data/processed/abt_with_clusters.csv` — ABT + K-Means cluster labels
+- `data/processed/abt.xlsx` — color-coded 3-sheet workbook (data + dictionary + summary)
+- `data/interim/fused_zip_hurricane.csv` — pre-feature-engineering fusion
+- `models/best_classifier.pkl` — XGBoost (saved by notebook 06)
+- `models/best_regressor.pkl` — Random Forest with log1p target
+- `models/fragility_scalers.pkl` — MinMax scalers fit on TRAIN
+- `outputs/priority_rankings.csv` — 2,587-zip priority index for the 5 TEST hurricanes
 
-To **build** a new bundle (project owner only):
+The fetch script auto-handles Google Drive's confirm-token dance via `gdown`, falls back to `curl` for non-Drive URLs, and prints a verification table at the end so you know each file landed.
+
+### Need the raw 5 GB downloads?
+
+Most workflows don't. But if you want to re-run notebook 01 (data acquisition) or notebook 03 (geospatial fusion) from scratch, ask the project owner to build a `--full` bundle:
 
 ```bash
-python scripts/make_share_bundle.py             # default: ~25 MB
-python scripts/make_share_bundle.py --full      # add data/raw, ~5 GB
-# Upload the resulting share_bundle.zip to Google Drive,
-# right-click -> Share -> "Anyone with the link", and post the URL to the team.
+# project owner only
+python scripts/make_share_bundle.py --full     # ~5 GB
+# upload share_bundle_full.zip to Drive, share new URL
 ```
+
+Then teammates run `scripts/fetch_share_bundle.py` against the new URL.
 
 ## Data sources
 
