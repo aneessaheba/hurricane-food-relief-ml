@@ -34,6 +34,38 @@ streamlit run app/streamlit_app.py
 
 Notebook 01 downloads ~5 GB and takes 1–3 hours (Irma's IHP file alone is 1.45 GB). Notebooks 03 (geospatial fusion) and 06 (modeling + Optuna) are each ~15–30 min.
 
+## Team setup (skip the long downloads)
+
+Teammates who just want to **inspect results, run the dashboard, or re-train on the prebuilt features** don't need to re-run notebook 01. Use the share-bundle workflow:
+
+```bash
+git clone https://github.com/ChaitanyaUppalapati/hurricane-food-relief-ml.git
+cd hurricane-food-relief-ml
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+
+# Pull the prebuilt artifacts bundle (data/processed, models, priority_rankings.csv)
+# Get the share URL from your team owner (Google Drive / Dropbox / OneDrive).
+python scripts/fetch_share_bundle.py "<paste share URL here>"
+
+# Now everything works without notebook 01:
+streamlit run app/streamlit_app.py
+# or
+jupyter lab            # re-run notebooks 02-08 against the cached artifacts
+```
+
+The default bundle is ~25 MB (processed CSVs + trained model pickles + priority rankings).
+A `--full` bundle adds the raw FEMA/Census downloads (~5 GB) for full re-runnability.
+
+To **build** a new bundle (project owner only):
+
+```bash
+python scripts/make_share_bundle.py             # default: ~25 MB
+python scripts/make_share_bundle.py --full      # add data/raw, ~5 GB
+# Upload the resulting share_bundle.zip to Google Drive,
+# right-click -> Share -> "Anyone with the link", and post the URL to the team.
+```
+
 ## Data sources
 
 | # | Source | URL | Role |

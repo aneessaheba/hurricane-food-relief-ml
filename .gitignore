@@ -20,6 +20,9 @@ models/
 # Large generated outputs (regenerable from notebooks)
 outputs/priority_rankings.csv
 
+# Team share bundles (built by scripts/make_share_bundle.py)
+share_bundle*.zip
+
 # Local/IDE
 .vscode/
 .idea/
