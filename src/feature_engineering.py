@@ -25,6 +25,11 @@ def compute_targets(df: pd.DataFrame) -> pd.DataFrame:
     rows without ZeroDivisionError.
     """
     df = df.copy()
+    required_cols = ["population", "total_inspected", "total_major_substantial", "total_approved_dollars"]
+    missing = [c for c in required_cols if c not in df.columns]
+    if missing:
+        raise ValueError(f"compute_targets expected columns {missing} but they are missing from the dataframe.")
+        
     pop = df["population"].replace(0, np.nan)
     insp = df["total_inspected"].replace(0, np.nan)
 
@@ -135,6 +140,9 @@ def impute_missing(df: pd.DataFrame) -> pd.DataFrame:
 def derive_demographic_shares(df: pd.DataFrame) -> pd.DataFrame:
     """Convert ACS raw counts to percent shares."""
     df = df.copy()
+    if "population" not in df.columns:
+        raise ValueError("derive_demographic_shares requires 'population' column.")
+        
     pop = df["population"].replace(0, np.nan)
 
     if "poverty_count" in df.columns:

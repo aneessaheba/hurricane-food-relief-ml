@@ -79,6 +79,13 @@ def snap_retailers_per_zip(
     for point-in-polygon. Returns DataFrame with zip_code + snap_retailer_count
     + dist_nearest_supermarket_mi.
     """
+    if retailers.empty or zcta_gdf.empty:
+        return pd.DataFrame({"zip_code": [], "snap_retailer_count": [], "dist_nearest_supermarket_mi": []})
+    if lat_col not in retailers.columns or lon_col not in retailers.columns:
+        raise ValueError(f"snap_retailers_per_zip requires lat/lon cols: {lat_col}, {lon_col}")
+    if "geometry" not in zcta_gdf.columns:
+        raise ValueError("zcta_gdf must be a GeoDataFrame with a 'geometry' column.")
+        
     pts = gpd.GeoDataFrame(
         retailers.copy(),
         geometry=gpd.points_from_xy(retailers[lon_col], retailers[lat_col]),
@@ -176,6 +183,11 @@ def pct_in_floodplain(
     reprojected to EPSG:5070. Processed county-by-county if `county_col` is
     present in `nfhl_gdf` to keep memory under control.
     """
+    if zcta_gdf.empty or nfhl_gdf.empty:
+        return pd.DataFrame({"zip_code": [], "pct_in_100yr_floodplain": []})
+    if "geometry" not in zcta_gdf.columns or "geometry" not in nfhl_gdf.columns:
+        raise ValueError("pct_in_floodplain requires GeoDataFrames with a 'geometry' column.")
+        
     zcta = zcta_gdf.to_crs(CRS_AREA).copy()
     nfhl = nfhl_gdf.to_crs(CRS_AREA).copy()
     nfhl = nfhl[nfhl["FLD_ZONE"].isin(SFHA_ZONES)]

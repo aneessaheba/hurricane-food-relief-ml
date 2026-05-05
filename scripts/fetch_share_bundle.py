@@ -49,7 +49,7 @@ def download_via_gdown(url_or_id: str, dest: Path) -> bool:
     print(f"  [gdown] downloading -> {dest.name}")
     try:
         # gdown.download accepts both ids and full sharing URLs
-        result = gdown.download(url_or_id, str(dest), quiet=False, fuzzy=True)
+        result = gdown.download(id=url_or_id, output=str(dest), quiet=False)
         return bool(result) and dest.exists() and dest.stat().st_size > 1024
     except Exception as e:
         print(f"  [gdown] failed: {e}")

@@ -36,3 +36,7 @@ share_bundle*.zip
 
 # Nested clone (repo root is the parent directory)
 hurricane-food-relief-ml/
+
+# Testing
+.pytest_cache/
+.coverage
