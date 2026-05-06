@@ -130,7 +130,7 @@ FEATURE_GROUPS = {
     "demographics": [
         "population", "median_income", "pct_poverty", "pct_renters",
         "pct_elderly_65plus", "pct_minority", "pct_no_vehicle",
-        "pct_mobile_homes", "housing_density_per_sqmi",
+        "pct_mobile_homes",
     ],
     "svi": [
         "svi_socioeconomic", "svi_household_comp", "svi_minority_lang",
@@ -138,12 +138,12 @@ FEATURE_GROUPS = {
     ],
     "food_access": [
         "food_desert_flag", "snap_retailer_count", "snap_retailers_per_1k",
-        "dist_nearest_supermarket_mi", "snap_households_avg",
+        "dist_nearest_supermarket_mi", "snap_participation_pct",
     ],
     "flood": ["pct_in_100yr_floodplain", "nri_cflood_score", "nri_hrcn_score"],
     "storm": [
         "hurricane_category", "max_wind_speed_kt",
-        "total_rainfall_inches", "distance_to_track_km",
+        "distance_to_track_km",
     ],
     "targets": [
         "total_inspected", "total_major_substantial", "total_approved_dollars",
@@ -160,9 +160,9 @@ CONTINUOUS_FEATURES = (
     FEATURE_GROUPS["demographics"]
     + FEATURE_GROUPS["svi"]
     + ["snap_retailer_count", "snap_retailers_per_1k",
-       "dist_nearest_supermarket_mi", "snap_households_avg"]
+       "dist_nearest_supermarket_mi", "snap_participation_pct"]
     + FEATURE_GROUPS["flood"]
-    + ["max_wind_speed_kt", "total_rainfall_inches", "distance_to_track_km"]
+    + ["max_wind_speed_kt", "distance_to_track_km"]
 )
 BINARY_FEATURES = ["food_desert_flag", "food_data_missing"]
 CATEGORICAL_FEATURES = ["hurricane_category", "state"]
@@ -172,6 +172,7 @@ ACS_VARIABLES = {
     "B01003_001E": "population",
     "B19013_001E": "median_income",
     "B17001_002E": "poverty_count",
+    "B25003_001E": "total_households",
     "B25003_003E": "renters",
     "B01001_020E": "male_65_66",
     "B01001_021E": "male_67_69",

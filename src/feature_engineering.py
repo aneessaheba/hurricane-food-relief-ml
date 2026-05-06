@@ -148,9 +148,8 @@ def derive_demographic_shares(df: pd.DataFrame) -> pd.DataFrame:
     if "poverty_count" in df.columns:
         df["pct_poverty"] = df["poverty_count"] / pop * 100
     if "renters" in df.columns:
-        # B25003_003 = renter-occupied households; scale by total pop as a proxy
-        # (better: total households B25003_001, but we use what spec lists).
-        df["pct_renters"] = df["renters"] / pop * 100
+        households = df["total_households"].replace(0, np.nan) if "total_households" in df.columns else pop
+        df["pct_renters"] = df["renters"] / households * 100
 
     elderly_cols = [c for c in df.columns if c.startswith(("male_6", "male_7", "male_8",
                                                             "female_6", "female_7", "female_8"))]
