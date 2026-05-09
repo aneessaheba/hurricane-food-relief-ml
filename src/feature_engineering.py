@@ -60,7 +60,9 @@ def bin_severity(
     if not counts.empty and counts.max() > qcut_fallback_threshold:
         print(f"[warn] severity binning dominated by one class "
               f"({counts.idxmax()}={counts.max():.1%}); falling back to qcut")
-        out = pd.qcut(s, q=4, labels=labels, duplicates="drop")
+        _, bin_edges = pd.qcut(s, q=4, retbins=True, duplicates="drop")
+        n_bins = len(bin_edges) - 1
+        out = pd.qcut(s, q=4, labels=labels[:n_bins], duplicates="drop")
     return out
 
 
