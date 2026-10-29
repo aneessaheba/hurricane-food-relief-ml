@@ -15,8 +15,8 @@ def test_fetch_fema_paginated():
         endpoint,
         json={
             "HousingAssistanceOwners": [
-                {"zipCode": "32003", "totalInspected": 10},
-                {"zipCode": "32004", "totalInspected": 5}
+                {"id": "00000000-0000-0000-0000-000000000001", "zipCode": "32003", "totalInspected": 10},
+                {"id": "00000000-0000-0000-0000-000000000002", "zipCode": "32004", "totalInspected": 5}
             ]
         },
         status=200

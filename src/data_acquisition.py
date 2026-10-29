@@ -1,14 +1,17 @@
 """
 Data acquisition: downloads all 13 raw data sources into data/raw/.
 
-Every function wraps network I/O in try/except with informative messages, uses
-tqdm progress bars, and returns the local path(s) written. Functions are
-idempotent: if the target file already exists and `force=False`, they skip.
+Every network call goes through `request_with_retry`, which retries rate
+limits, 5xx responses, timeouts and dropped connections with exponential
+backoff. Functions are idempotent: if the target file already exists and
+`force=False`, they skip. Progress and warnings go to the `logging` module;
+call `setup_logging()` (done by `download_all`) to see them.
 """
 from __future__ import annotations
 
-import io
+import logging
 import os
+import random
 import sys
 import time
 import zipfile
@@ -26,31 +29,94 @@ from config import (  # noqa: E402
 )
 
 RAW = DATA_PATHS["raw"]
+log = logging.getLogger(__name__)
+
+TRANSIENT_STATUS = (429, 500, 502, 503, 504)
+
+
+def setup_logging(level: int = logging.INFO, log_file: Optional[Path] = None) -> None:
+    """Send pipeline log messages to stderr and, optionally, to `log_file`."""
+    handlers: list[logging.Handler] = [logging.StreamHandler()]
+    if log_file is not None:
+        Path(log_file).parent.mkdir(parents=True, exist_ok=True)
+        handlers.append(logging.FileHandler(log_file, encoding="utf-8"))
+    logging.basicConfig(
+        level=level, handlers=handlers, force=True,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
 
 
 # -----------------------------------------------------------------------------
 # Generic helpers
 # -----------------------------------------------------------------------------
-def download_file(url: str, dest: Path, force: bool = False, chunk: int = 1 << 15) -> Path:
-    """Stream a URL to `dest` with a tqdm progress bar. Idempotent."""
+def _backoff_seconds(attempt: int, retry_after: Optional[str] = None,
+                     cap: float = 60.0) -> float:
+    """Exponential backoff with jitter; honours a numeric Retry-After header."""
+    if retry_after is not None:
+        try:
+            return min(cap, float(retry_after))
+        except ValueError:
+            pass
+    return min(cap, 2 ** attempt) * (0.5 + random.random() / 2)
+
+
+def request_with_retry(
+    url: str, params: Optional[dict] = None, timeout: float = 180,
+    max_retries: int = 6, stream: bool = False, sleep=time.sleep,
+) -> requests.Response:
+    """
+    GET `url`, retrying rate limits (429), 5xx responses, timeouts and
+    connection errors. Other 4xx errors fail immediately because retrying
+    cannot fix them. `sleep` is injectable so tests run instantly.
+    """
+    last_err: Optional[Exception] = None
+    for attempt in range(max_retries):
+        try:
+            r = requests.get(url, params=params, timeout=timeout, stream=stream)
+        except (requests.ConnectionError, requests.Timeout) as e:
+            last_err, retry_after = e, None
+        else:
+            if r.status_code not in TRANSIENT_STATUS:
+                r.raise_for_status()
+                return r
+            last_err = requests.HTTPError(f"{r.status_code} from {url}", response=r)
+            retry_after = r.headers.get("Retry-After")
+            r.close()
+        if attempt < max_retries - 1:
+            wait = _backoff_seconds(attempt, retry_after)
+            log.warning("retry %d/%d for %s after %s; sleeping %.1fs",
+                        attempt + 1, max_retries, url, last_err, wait)
+            sleep(wait)
+    raise RuntimeError(f"Request failed after {max_retries} attempts: {url}: {last_err}") from last_err
+
+
+def download_file(url: str, dest: Path, force: bool = False, chunk: int = 1 << 15,
+                  max_retries: int = 4) -> Path:
+    """
+    Stream a URL to `dest` with a tqdm progress bar. Idempotent.
+
+    Data is written to `<dest>.part` and renamed on success, so an interrupted
+    download never leaves a truncated file that a later run would skip.
+    """
     dest = Path(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
     if dest.exists() and not force:
-        print(f"[skip] {dest.name} already exists ({dest.stat().st_size:,} bytes)")
+        log.info("[skip] %s already exists (%s bytes)", dest.name, f"{dest.stat().st_size:,}")
         return dest
+    part = dest.with_name(dest.name + ".part")
     try:
-        with requests.get(url, stream=True, timeout=120) as r:
-            r.raise_for_status()
+        with request_with_retry(url, timeout=120, stream=True,
+                                max_retries=max_retries) as r:
             total = int(r.headers.get("Content-Length", 0))
-            with open(dest, "wb") as fh, tqdm(
+            with open(part, "wb") as fh, tqdm(
                 total=total, unit="B", unit_scale=True, desc=dest.name
             ) as pbar:
                 for block in r.iter_content(chunk_size=chunk):
                     fh.write(block)
                     pbar.update(len(block))
+        part.replace(dest)
     except Exception as e:
-        if dest.exists():
-            dest.unlink()
+        part.unlink(missing_ok=True)
         raise RuntimeError(f"Download failed for {url}: {e}") from e
     return dest
 
@@ -58,47 +124,46 @@ def download_file(url: str, dest: Path, force: bool = False, chunk: int = 1 << 1
 # -----------------------------------------------------------------------------
 # FEMA API (generic paginator)
 # -----------------------------------------------------------------------------
+def _id_literal(value) -> str:
+    """OData literal for an OpenFEMA id: integers bare, UUID strings quoted."""
+    return str(value) if isinstance(value, int) else f"'{value}'"
+
+
 def fetch_fema_paginated(
     endpoint: str, disaster_number: int, top: int = 10000, max_pages: int = 500,
-    max_retries: int = 6,
+    max_retries: int = 6, sleep=time.sleep,
 ) -> pd.DataFrame:
     """
-    Query a FEMA OpenFEMA v2 endpoint for a single disaster number, paginating
-    with $skip and $top. Retries transient 5xx / timeouts with exponential
-    backoff. Returns a DataFrame of all records.
+    Query a FEMA OpenFEMA v2 endpoint for a single disaster number.
+
+    Pages by keyset (`id gt <last id>`, ordered by id) rather than $skip:
+    deep $skip offsets on the large IHP tables time out server-side, while a
+    keyset page costs the same at any depth. Ids are integers on some
+    endpoints and UUIDs on others; both are handled. Transient failures are
+    retried with exponential backoff. Returns a DataFrame of all records.
     """
     all_rows = []
-    skip = 0
+    last_id = None
     dataset_key = endpoint.rstrip("/").split("/")[-1]  # e.g. "HousingAssistanceOwners"
     pbar = tqdm(desc=f"FEMA {dataset_key} disaster={disaster_number}", unit="rec")
-    for page in range(max_pages):
-        params = {
-            "$filter": f"disasterNumber eq {disaster_number}",
-            "$top": top,
-            "$skip": skip,
-            "$format": "json",
-        }
-        data = None
-        for attempt in range(max_retries):
-            try:
-                r = requests.get(endpoint, params=params, timeout=180)
-                # retry on 5xx or 429
-                if r.status_code in (429, 500, 502, 503, 504):
-                    raise requests.HTTPError(f"{r.status_code} transient")
-                r.raise_for_status()
-                data = r.json()
-                break
-            except (requests.HTTPError, requests.ConnectionError,
-                    requests.Timeout, ValueError) as e:
-                wait = min(60, 2 ** attempt)
-                pbar.write(f"  [retry {attempt+1}/{max_retries}] skip={skip} "
-                           f"err={e} — sleeping {wait}s")
-                time.sleep(wait)
-        if data is None:
+    for _ in range(max_pages):
+        filt = f"disasterNumber eq {disaster_number}"
+        if last_id is not None:
+            filt += f" and id gt {_id_literal(last_id)}"
+        params = {"$filter": filt, "$orderby": "id", "$top": top, "$format": "json"}
+        try:
+            r = request_with_retry(endpoint, params=params,
+                                   max_retries=max_retries, sleep=sleep)
+            data = r.json()
+        except (RuntimeError, ValueError) as e:
+            pbar.close()
             raise RuntimeError(
-                f"FEMA request failed after {max_retries} retries "
-                f"(endpoint={endpoint}, disaster={disaster_number}, skip={skip})"
-            )
+                f"FEMA request failed (endpoint={endpoint}, "
+                f"disaster={disaster_number}, after id={last_id}): {e}"
+            ) from e
+        if "error" in data:
+            pbar.close()
+            raise RuntimeError(f"FEMA API error for {dataset_key}: {data['error']}")
         rows = data.get(dataset_key, [])
         if not rows:
             break
@@ -106,7 +171,10 @@ def fetch_fema_paginated(
         pbar.update(len(rows))
         if len(rows) < top:
             break
-        skip += top
+        last_id = rows[-1]["id"]
+    else:
+        log.warning("%s disaster=%s stopped at max_pages=%d; data may be incomplete",
+                    dataset_key, disaster_number, max_pages)
     pbar.close()
     return pd.DataFrame(all_rows)
 
@@ -124,11 +192,11 @@ def fetch_fema_housing_assistance(force: bool = False) -> dict[int, dict[str, Pa
         if not owners_path.exists() or force:
             df = fetch_fema_paginated(API_ENDPOINTS["fema_housing_owners"], dn)
             df.to_csv(owners_path, index=False)
-            print(f"  wrote {owners_path.name} rows={len(df):,}")
+            log.info("wrote %s rows=%s", owners_path.name, f"{len(df):,}")
         if not renters_path.exists() or force:
             df = fetch_fema_paginated(API_ENDPOINTS["fema_housing_renters"], dn)
             df.to_csv(renters_path, index=False)
-            print(f"  wrote {renters_path.name} rows={len(df):,}")
+            log.info("wrote %s rows=%s", renters_path.name, f"{len(df):,}")
         out[dn] = {"owners": owners_path, "renters": renters_path}
     return out
 
@@ -137,9 +205,8 @@ def fetch_fema_ihp_registrations(force: bool = False) -> dict[int, Path]:
     """
     IHP Valid Registrations — target-validation only, never the primary target.
     For Ida (4611) and Ian (4673) the registration tables are very large
-    (~800k-1M rows); a 503 mid-pagination can lose work. We retry transparently
-    and can also fall back to only counting registrations per zip (which is all
-    notebook 02 needs anyway).
+    (~800k-1M rows). Keyset paging keeps each page cheap; if a disaster still
+    fails it is skipped, since notebook 02 only needs per-zip counts.
     """
     out = {}
     for h in HURRICANE_META:
@@ -151,29 +218,28 @@ def fetch_fema_ihp_registrations(force: bool = False) -> dict[int, Path]:
                     API_ENDPOINTS["fema_ihp_registrations"], dn
                 )
                 df.to_csv(dest, index=False)
-                print(f"  wrote {dest.name} rows={len(df):,}")
+                log.info("wrote %s rows=%s", dest.name, f"{len(df):,}")
             except RuntimeError as e:
-                print(f"[warn] IHP download failed for disaster {dn}: {e}")
-                print(f"       skipping — this is validation-only data; "
-                      f"notebook 02 will continue without this disaster.")
+                log.warning("IHP download failed for disaster %s: %s — skipping; "
+                            "this is validation-only data and notebook 02 will "
+                            "continue without this disaster.", dn, e)
         out[dn] = dest
     return out
 
 
 def fetch_fema_disaster_declarations(force: bool = False) -> Path:
-    """Disaster declarations summary for all 8 disasters."""
+    """Disaster declarations summary for every disaster in HURRICANE_META."""
     dest = RAW / "fema_disaster_declarations.csv"
     if dest.exists() and not force:
-        print(f"[skip] {dest.name}")
+        log.info("[skip] %s", dest.name)
         return dest
     dns = [h["disaster_number"] for h in HURRICANE_META]
     filt = " or ".join(f"disasterNumber eq {dn}" for dn in dns)
     params = {"$filter": filt, "$top": 10000, "$format": "json"}
-    r = requests.get(API_ENDPOINTS["fema_disasters"], params=params, timeout=120)
-    r.raise_for_status()
+    r = request_with_retry(API_ENDPOINTS["fema_disasters"], params=params, timeout=120)
     rows = r.json().get("DisasterDeclarationsSummaries", [])
     pd.DataFrame(rows).to_csv(dest, index=False)
-    print(f"  wrote {dest.name} rows={len(rows):,}")
+    log.info("wrote %s rows=%s", dest.name, f"{len(rows):,}")
     return dest
 
 
@@ -190,7 +256,7 @@ def fetch_census_acs(
     """
     dest = RAW / "census_acs5_zcta.csv"
     if dest.exists() and not force:
-        print(f"[skip] {dest.name}")
+        log.info("[skip] %s", dest.name)
         return dest
     api_key = api_key or os.environ.get("CENSUS_API_KEY")
     varlist = ",".join(ACS_VARIABLES.keys())
@@ -200,9 +266,8 @@ def fetch_census_acs(
     }
     if api_key:
         params["key"] = api_key
-    print("[census] querying ACS 5-year at ZCTA level (may take ~1 min)")
-    r = requests.get(API_ENDPOINTS["census_acs5"], params=params, timeout=180)
-    r.raise_for_status()
+    log.info("[census] querying ACS 5-year at ZCTA level (may take ~1 min)")
+    r = request_with_retry(API_ENDPOINTS["census_acs5"], params=params, timeout=180)
     payload = r.json()
     df = pd.DataFrame(payload[1:], columns=payload[0])
     df = df.rename(columns={**ACS_VARIABLES,
@@ -211,7 +276,7 @@ def fetch_census_acs(
     for col in ACS_VARIABLES.values():
         df[col] = pd.to_numeric(df[col], errors="coerce")
     df.to_csv(dest, index=False)
-    print(f"  wrote {dest.name} rows={len(df):,}")
+    log.info("wrote %s rows=%s", dest.name, f"{len(df):,}")
     return dest
 
 
@@ -290,19 +355,18 @@ def download_storm_events(years: Iterable[int] = (2017, 2018, 2019, 2020, 2021, 
     """
     out = []
     base = DOWNLOAD_URLS["noaa_storm_events_base"]
+    # One listing serves every year.
+    try:
+        idx = request_with_retry(base, timeout=60, max_retries=3).text
+    except Exception as e:
+        log.warning("could not list NOAA storm-events index: %s", e)
+        idx = ""
     for y in years:
-        # Listing the bucket to discover the current filename; fall back to
-        # requiring user to drop the file in manually if scraping fails.
-        try:
-            idx = requests.get(base, timeout=60).text
-        except Exception as e:
-            print(f"[warn] could not list NOAA storm-events index: {e}")
-            idx = ""
         token = f"StormEvents_details-ftp_v1.0_d{y}_c"
         matches = [line for line in idx.splitlines() if token in line]
         if not matches:
-            print(f"[warn] no NOAA storm-events file found for {y} — "
-                  f"download manually to {RAW}/ and rerun")
+            log.warning("no NOAA storm-events file found for %s — "
+                        "download manually to %s/ and rerun", y, RAW)
             continue
         # extract filename from HTML anchor
         fname = matches[0].split(token, 1)[1].split('"', 1)[0]
@@ -350,13 +414,14 @@ def download_nfhl_state(state_fips: str, force: bool = False) -> Optional[Path]:
             else:
                 all_features = cached.get("features", [])
                 crs = cached.get("crs")
-                print(f"  state {state_fips}: resuming from {len(all_features)} cached features")
+                log.info("state %s: resuming from %d cached features",
+                         state_fips, len(all_features))
         except Exception:
             dest.unlink()
 
     bbox = _NFHL_STATE_BBOX.get(state_fips)
     if bbox is None:
-        print(f"[warn] No bounding box defined for state FIPS {state_fips}")
+        log.warning("No bounding box defined for state FIPS %s", state_fips)
         return None
 
     xmin, ymin, xmax, ymax = bbox
@@ -378,14 +443,16 @@ def download_nfhl_state(state_fips: str, force: bool = False) -> Optional[Path]:
     while True:
         try:
             params = {**base_params, "resultOffset": offset}
-            r = requests.get(API_ENDPOINTS["nfhl_rest"], params=params, timeout=300)
-            r.raise_for_status()
+            r = request_with_retry(API_ENDPOINTS["nfhl_rest"], params=params,
+                                   timeout=300, max_retries=3)
             page = r.json()
         except Exception as e:
-            print(f"\n[warn] NFHL page failed for state {state_fips} at offset={offset}: {e}")
+            log.warning("NFHL page failed for state %s at offset=%d: %s",
+                        state_fips, offset, e)
             break
         if "error" in page:
-            print(f"\n[warn] NFHL API error for state {state_fips} offset={offset}: {page['error']}")
+            log.warning("NFHL API error for state %s offset=%d: %s",
+                        state_fips, offset, page["error"])
             break
         features = page.get("features", [])
         if not features:
@@ -394,7 +461,7 @@ def download_nfhl_state(state_fips: str, force: bool = False) -> Optional[Path]:
         all_features.extend(features)
         if crs is None:
             crs = page.get("crs")
-        print(f"  state {state_fips}: fetched {len(all_features)} features...", end="\r")
+        log.debug("state %s: fetched %d features", state_fips, len(all_features))
         if len(features) < 2000:
             complete = True
             break
@@ -406,7 +473,7 @@ def download_nfhl_state(state_fips: str, force: bool = False) -> Optional[Path]:
         dest.write_text(_json.dumps(geojson), encoding="utf-8")
 
     if not all_features:
-        print(f"[warn] NFHL: no features returned for state {state_fips}")
+        log.warning("NFHL: no features returned for state %s", state_fips)
         return None
 
     geojson = {"type": "FeatureCollection", "features": all_features}
@@ -416,57 +483,59 @@ def download_nfhl_state(state_fips: str, force: bool = False) -> Optional[Path]:
         geojson["complete"] = True
     dest.write_text(_json.dumps(geojson), encoding="utf-8")
     status = "complete" if complete else f"partial ({len(all_features)} features)"
-    print(f"  state {state_fips}: {status} -> {dest.name}")
+    log.info("state %s: %s -> %s", state_fips, status, dest.name)
     return dest
 
 
 # -----------------------------------------------------------------------------
 # Convenience: run everything
 # -----------------------------------------------------------------------------
-def download_all(census_key: Optional[str] = None, force: bool = False) -> None:
+def download_all(census_key: Optional[str] = None, force: bool = False,
+                 log_file: Optional[Path] = None) -> None:
     """Run every downloader in order. Safe to re-run."""
-    print("\n=== 1. FEMA Housing Assistance (TARGET) ===")
+    setup_logging(log_file=log_file or DATA_PATHS["interim"] / "download.log")
+    log.info("=== 1. FEMA Housing Assistance (TARGET) ===")
     fetch_fema_housing_assistance(force=force)
-    print("\n=== 2. FEMA IHP Valid Registrations (validation only) ===")
+    log.info("=== 2. FEMA IHP Valid Registrations (validation only) ===")
     fetch_fema_ihp_registrations(force=force)
-    print("\n=== 3. FEMA Disaster Declarations ===")
+    log.info("=== 3. FEMA Disaster Declarations ===")
     fetch_fema_disaster_declarations(force=force)
-    print("\n=== 4. Census ACS 5-year ===")
+    log.info("=== 4. Census ACS 5-year ===")
     fetch_census_acs(api_key=census_key, force=force)
-    print("\n=== 5. IBTrACS North Atlantic ===")
+    log.info("=== 5. IBTrACS North Atlantic ===")
     download_ibtracs(force=force)
+
     def _try(name, fn, expected_filename):
         target = RAW / expected_filename
         if target.exists():
-            print(f"[skip] {expected_filename} already present")
+            log.info("[skip] %s already present", expected_filename)
             return
         try:
             fn(force=force)
         except Exception as e:
             page = MANUAL_DOWNLOAD_PAGES.get(name, "")
-            print(f"[warn] {name} download failed: {e}")
-            print(f"       → MANUAL DOWNLOAD: open {page}")
-            print(f"       → save the file to: {target}")
+            log.warning("%s download failed: %s\n  -> MANUAL DOWNLOAD: open %s\n"
+                        "  -> save the file to: %s", name, e, page, target)
 
-    print("\n=== 6. USDA Food Access Atlas ===")
+    log.info("=== 6. USDA Food Access Atlas ===")
     _try("food_atlas", download_food_atlas, "food_access_atlas.xlsx")
-    print("\n=== 7. USDA SNAP Retailer Historical ===")
+    log.info("=== 7. USDA SNAP Retailer Historical ===")
     _try("snap_retailers", download_snap_retailers, "snap_retailers.zip")
-    print("\n=== 8. CDC SVI 2022 ===")
+    log.info("=== 8. CDC SVI 2022 ===")
     _try("cdc_svi_2022", download_svi, "cdc_svi_2022.csv")
-    print("\n=== 9. HUD Tract-ZIP Crosswalk ===")
+    log.info("=== 9. HUD Tract-ZIP Crosswalk ===")
     _try("hud_tract_zip", download_hud_crosswalk, "hud_tract_zip.xlsx")
-    print("\n=== 10. Census TIGER/Line ZCTA shapefile ===")
+    log.info("=== 10. Census TIGER/Line ZCTA shapefile ===")
     download_zcta_shapefile(force=force)
-    print("\n=== 11. NOAA Storm Events (validation) ===")
+    log.info("=== 11. NOAA Storm Events (validation) ===")
     download_storm_events(force=force)
-    print("\n=== 12. NFHL SFHA polygons (per state, best-effort) ===")
+    log.info("=== 12. NFHL SFHA polygons (per state, best-effort) ===")
     state_fips = {"TX": "48", "LA": "22", "FL": "12", "NC": "37",
                   "SC": "45", "GA": "13", "AL": "01", "MS": "28",
                   "TN": "47", "VA": "51"}
     for st in STATES_IN_SCOPE:
         if st in state_fips:
             download_nfhl_state(state_fips[st], force=force)
-    print("\n=== 13. FEMA National Risk Index (census-tract level) ===")
+    log.info("=== 13. FEMA National Risk Index (census-tract level) ===")
     _try("fema_nri_tract", download_fema_nri_tract, "fema_nri_tract.csv")
-    print("\nAll downloads complete.")
+    log.info("All downloads complete.")
