@@ -8,8 +8,13 @@ sklearn's Pipeline (which would leak SMOTE into predict()).
 """
 from __future__ import annotations
 
-from typing import Dict, Tuple
+import logging
+from datetime import datetime, timezone
+from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
+from typing import Dict, Iterable, Optional, Tuple
 
+import joblib
 import numpy as np
 import pandas as pd
 from imblearn.over_sampling import SMOTE
@@ -32,6 +37,8 @@ from sklearn.svm import SVC, LinearSVC
 from config import (
     RANDOM_STATE, CONTINUOUS_FEATURES, BINARY_FEATURES, CATEGORICAL_FEATURES,
 )
+
+log = logging.getLogger(__name__)
 
 
 # -----------------------------------------------------------------------------
@@ -222,3 +229,92 @@ def classification_eval(y_true, y_pred) -> Dict[str, object]:
         "f1_weighted": f1_score(y_true, y_pred, average="weighted"),
         "f1_macro": f1_score(y_true, y_pred, average="macro"),
     }
+
+
+# -----------------------------------------------------------------------------
+# Saving and loading the deployed model
+# -----------------------------------------------------------------------------
+# Libraries whose version changes can silently alter a pickled model.
+_TRACKED_PACKAGES = ("scikit-learn", "xgboost", "imbalanced-learn", "numpy", "pandas")
+_REQUIRED_KEYS = ("pipe", "label_encoder", "features")
+
+
+def _package_versions() -> Dict[str, Optional[str]]:
+    out = {}
+    for pkg in _TRACKED_PACKAGES:
+        try:
+            out[pkg] = version(pkg)
+        except PackageNotFoundError:
+            out[pkg] = None
+    return out
+
+
+def save_model_package(
+    path, pipe, label_encoder, features, calibrator=None,
+    train_storms: Iterable[str] = (), calibration_storms: Iterable[str] = (),
+    **extra,
+) -> Path:
+    """
+    Save the classifier package used by notebooks 07-08 and the dashboard,
+    with metadata describing how it was built: features, class order, the
+    storms it was trained and calibrated on, and library versions.
+    """
+    package = {
+        "pipe": pipe, "calibrator": calibrator, "label_encoder": label_encoder,
+        "features": list(features), **extra,
+        "metadata": {
+            "created_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "features": list(features),
+            "classes": [str(c) for c in label_encoder.classes_],
+            "train_storms": list(train_storms),
+            "calibration_storms": list(calibration_storms),
+            "calibrated": calibrator is not None,
+            "versions": _package_versions(),
+        },
+    }
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    joblib.dump(package, path)
+    return path
+
+
+def load_model_package(path, expected_features: Optional[Iterable[str]] = None,
+                       strict: bool = False) -> dict:
+    """
+    Load a package written by `save_model_package` and check it.
+
+    Missing keys or a feature list that differs from `expected_features` raise
+    ValueError. Library versions that differ from the ones the model was saved
+    with are logged as warnings, or raise when `strict=True`. Packages saved
+    before metadata existed load with a warning.
+    """
+    package = joblib.load(path)
+    missing = [k for k in _REQUIRED_KEYS if k not in package]
+    if missing:
+        raise ValueError(f"{path}: model package is missing {missing}")
+
+    if expected_features is not None and list(package["features"]) != list(expected_features):
+        raise ValueError(
+            f"{path}: model was trained on different features "
+            f"(saved {len(package['features'])}, expected {len(list(expected_features))}); retrain it")
+
+    meta = package.get("metadata")
+    if meta is None:
+        log.warning("%s has no metadata (saved before save_model_package); "
+                    "library versions cannot be checked", path)
+        return package
+
+    saved_classes = meta.get("classes")
+    actual_classes = [str(c) for c in package["label_encoder"].classes_]
+    if saved_classes is not None and saved_classes != actual_classes:
+        raise ValueError(f"{path}: class order {actual_classes} != saved {saved_classes}")
+
+    current = _package_versions()
+    drift = {k: (v, current.get(k)) for k, v in meta.get("versions", {}).items()
+             if v != current.get(k)}
+    if drift:
+        msg = ", ".join(f"{k} saved with {old}, running {new}" for k, (old, new) in drift.items())
+        if strict:
+            raise ValueError(f"{path}: library versions differ: {msg}")
+        log.warning("%s: library versions differ (%s); predictions may change", path, msg)
+    return package
