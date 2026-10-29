@@ -167,6 +167,11 @@ CONTINUOUS_FEATURES = (
 BINARY_FEATURES = ["food_desert_flag", "food_data_missing"]
 CATEGORICAL_FEATURES = ["hurricane_category", "state"]
 
+# Final model inputs (paper Table II): 22 continuous + 1 binary + 2 categorical.
+# food_data_missing is 0 on every ABT row, so the model drops it as a constant.
+MODEL_BINARY_FEATURES = ["food_desert_flag"]
+MODEL_FEATURES = CONTINUOUS_FEATURES + MODEL_BINARY_FEATURES + CATEGORICAL_FEATURES
+
 # Census ACS variable codes
 ACS_VARIABLES = {
     "B01003_001E": "population",

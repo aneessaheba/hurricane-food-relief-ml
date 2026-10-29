@@ -16,6 +16,7 @@ from imblearn.over_sampling import SMOTE
 from imblearn.pipeline import Pipeline as ImbPipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     classification_report, confusion_matrix, f1_score,
@@ -23,6 +24,7 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import GridSearchCV, StratifiedGroupKFold
 from sklearn.naive_bayes import GaussianNB
+from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import OneHotEncoder, RobustScaler
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.svm import SVC, LinearSVC
@@ -38,12 +40,16 @@ from config import (
 def build_preprocessor(
     continuous=None, categorical=None, binary=None,
 ) -> ColumnTransformer:
-    continuous = continuous or CONTINUOUS_FEATURES
-    categorical = categorical or CATEGORICAL_FEATURES
-    binary = binary or BINARY_FEATURES
+    # `is None`, not `or`: an explicitly empty group must stay empty.
+    continuous = CONTINUOUS_FEATURES if continuous is None else continuous
+    categorical = CATEGORICAL_FEATURES if categorical is None else categorical
+    binary = BINARY_FEATURES if binary is None else binary
     return ColumnTransformer(
         transformers=[
-            ("num", RobustScaler(), continuous),
+            # Median-impute inside the pipeline (fit on the training fold only):
+            # snap_participation_pct is ~7% NaN and SMOTE rejects NaN.
+            ("num", make_pipeline(SimpleImputer(strategy="median"), RobustScaler()),
+             continuous),
             ("cat", OneHotEncoder(drop="first", handle_unknown="ignore"),
              categorical),
             ("bin", "passthrough", binary),
