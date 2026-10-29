@@ -23,6 +23,9 @@ sys.path.append(str(PROJECT_ROOT))
 
 from config import DATA_PATHS, TARGET_COL, TARGET_CLASS_COL  # noqa: E402
 from src.modeling import load_model_package  # noqa: E402
+from src.priority_index import rerank  # noqa: E402
+
+DEFAULT_RISK_WEIGHT = 0.6  # weighting used for the published rankings and maps
 
 OUT = DATA_PATHS["outputs"]
 MODELS = DATA_PATHS["models"]
@@ -74,12 +77,21 @@ st.sidebar.header("Filters")
 hurricane = st.sidebar.selectbox(
     "Hurricane", sorted(df["hurricane_name"].unique()),
 )
+risk_weight = st.sidebar.slider(
+    "Weight on damage risk", 0.0, 1.0, DEFAULT_RISK_WEIGHT, 0.05,
+    help="FRPI = w x P(High or Severe) + (1 - w) x food fragility. Lower w "
+         "favours food-fragile ZIPs over the most damaged ones (paper Table III).",
+)
+st.sidebar.caption(f"Damage risk {risk_weight:.2f} / food fragility {1 - risk_weight:.2f}")
 min_score = st.sidebar.slider("Minimum priority score", 0.0, 1.0, 0.0, 0.05)
 top_n = st.sidebar.slider("Top-N zip codes", 10, 100, 25, step=5)
 only_desert = st.sidebar.checkbox("Food deserts only")
 only_q4 = st.sidebar.checkbox("High-SVI (Q4) only")
 
-sub = df[df["hurricane_name"] == hurricane].copy()
+storm = rerank(df[df["hurricane_name"] == hurricane], weight_risk=risk_weight)
+default_top = set(rerank(storm, DEFAULT_RISK_WEIGHT)
+                  .nsmallest(top_n, "priority_rank", keep="all")["zip_code"])
+sub = storm.copy()
 if "svi_overall" in sub.columns:
     sub["svi_q"] = pd.qcut(sub["svi_overall"], 4,
                            labels=["Q1", "Q2", "Q3", "Q4"])
@@ -100,6 +112,10 @@ c2.metric("Predicted High/Severe",
 c3.metric("Food deserts",
           int(sub.get("food_desert_flag", pd.Series([0]*len(sub))).sum()))
 c4.metric("Mean priority", f"{sub['priority_index_norm'].mean():.3f}")
+if risk_weight != DEFAULT_RISK_WEIGHT:
+    st.caption(f"{len(set(sub['zip_code']) & default_top)} of these {len(sub)} ZIP codes "
+               f"are also in the top {top_n} at the default "
+               f"{DEFAULT_RISK_WEIGHT:.1f}/{1 - DEFAULT_RISK_WEIGHT:.1f} weighting.")
 if "svi_overall" in sub.columns:
     c5.metric("Mean SVI", f"{sub['svi_overall'].mean():.2f}")
 
@@ -112,6 +128,9 @@ map_col, table_col = st.columns([3, 2])
 
 with map_col:
     st.subheader("Priority map")
+    if risk_weight != DEFAULT_RISK_WEIGHT:
+        st.caption(f"The map shows the default {DEFAULT_RISK_WEIGHT:.1f}/"
+                   f"{1 - DEFAULT_RISK_WEIGHT:.1f} weighting; the table follows the slider.")
     map_file = OUT / f"priority_map_{hurricane.lower()}.html"
     if map_file.exists():
         html = map_file.read_text(encoding="utf-8")

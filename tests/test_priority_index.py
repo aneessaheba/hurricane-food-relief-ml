@@ -53,3 +53,51 @@ def test_priority_index():
     # Priority norm should strictly be [0, 1]
     assert res["priority_index_norm"].max() <= 1.0
     assert res["priority_index_norm"].min() >= 0.0
+
+
+# ---------------------------------------------------------------------------
+# Re-weighting the FRPI (dashboard slider)
+# ---------------------------------------------------------------------------
+from pathlib import Path
+
+from src.priority_index import rerank
+
+RANKINGS = Path(__file__).resolve().parents[1] / "outputs" / "priority_rankings.csv"
+
+
+def _ranked():
+    return pd.DataFrame({
+        "hurricane_name": ["Ida", "Ida", "Ida", "Ian", "Ian"],
+        "prob_high_or_severe": [0.9, 0.5, 0.1, 0.8, 0.2],
+        "food_fragility_score": [0.1, 0.5, 0.9, 0.3, 0.7],
+    })
+
+
+def test_rerank_extremes_rank_by_one_component():
+    risk_only = rerank(_ranked(), weight_risk=1.0)
+    assert risk_only["priority_rank"].tolist() == [1, 2, 3, 1, 2]
+    fragility_only = rerank(_ranked(), weight_risk=0.0)
+    assert fragility_only["priority_rank"].tolist() == [3, 2, 1, 2, 1]
+
+
+def test_rerank_normalizes_within_each_storm():
+    out = rerank(_ranked(), weight_risk=0.6)
+    for _, g in out.groupby("hurricane_name"):
+        assert g["priority_index_norm"].min() == pytest.approx(0.0)
+        assert g["priority_index_norm"].max() == pytest.approx(1.0)
+
+
+def test_rerank_constant_storm_and_bad_weight():
+    flat = _ranked().assign(prob_high_or_severe=0.5, food_fragility_score=0.5)
+    assert (rerank(flat)["priority_index_norm"] == 0.0).all()
+    with pytest.raises(ValueError):
+        rerank(_ranked(), weight_risk=1.2)
+
+
+@pytest.mark.skipif(not RANKINGS.exists(), reason="priority_rankings.csv not built")
+def test_rerank_reproduces_published_rankings_at_default_weight():
+    r = pd.read_csv(RANKINGS, dtype={"zip_code": str})
+    out = rerank(r, weight_risk=0.6)
+    assert np.allclose(out["food_relief_priority_index"], r["food_relief_priority_index"])
+    assert np.allclose(out["priority_index_norm"], r["priority_index_norm"])
+    assert (out["priority_rank"] == r["priority_rank"]).all()

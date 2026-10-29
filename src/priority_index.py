@@ -131,3 +131,29 @@ def priority_index(
         idx.rank(ascending=False, method="min").astype(int)
     )
     return df
+
+
+def rerank(
+    df: pd.DataFrame,
+    weight_risk: float = 0.6,
+    group_col: str = "hurricane_name",
+) -> pd.DataFrame:
+    """
+    Recompute the FRPI for a different risk/fragility weighting, using the
+    stored prob_high_or_severe and food_fragility_score. As in the published
+    rankings, priority_index_norm is rescaled and priority_rank counted
+    within each storm. At weight_risk=0.6 this reproduces the stored columns.
+    """
+    if not 0.0 <= weight_risk <= 1.0:
+        raise ValueError(f"weight_risk must be in [0, 1], got {weight_risk}")
+    df = df.copy()
+    risk = df["prob_high_or_severe"].fillna(0)
+    frag = df["food_fragility_score"].fillna(0)
+    idx = weight_risk * risk + (1.0 - weight_risk) * frag
+    df["food_relief_priority_index"] = idx
+
+    g = idx.groupby(df[group_col])
+    lo, rng = g.transform("min"), g.transform("max") - g.transform("min")
+    df["priority_index_norm"] = ((idx - lo) / rng.where(rng > 0)).fillna(0.0)
+    df["priority_rank"] = g.rank(ascending=False, method="min").astype(int)
+    return df
