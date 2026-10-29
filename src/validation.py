@@ -8,8 +8,8 @@ match their bins); warnings are suspicious values worth a look but not fatal.
 and `check_against_dictionary` keeps the table in step with
 outputs/data_dictionary.csv.
 
-Run against the processed table with:
-    python -m src.validation data/processed/abt.csv
+Run against the corrected table built by src.pipeline (the default) or any ABT:
+    python -m src.validation [data/processed/abt_clean.csv]
 """
 from __future__ import annotations
 
@@ -182,7 +182,7 @@ def assert_valid(df: pd.DataFrame) -> List[Issue]:
 
 
 if __name__ == "__main__":
-    path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("data/processed/abt.csv")
+    path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("data/processed/abt_clean.csv")
     abt = pd.read_csv(path, dtype={"zip_code": str})
     found = validate_abt(abt)
     dictionary_path = Path(__file__).resolve().parents[1] / "outputs" / "data_dictionary.csv"

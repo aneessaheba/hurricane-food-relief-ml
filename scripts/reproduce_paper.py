@@ -7,17 +7,21 @@ check the numbers against the committed results.
     python scripts/reproduce_paper.py --fetch          # download missing inputs first
     python scripts/reproduce_paper.py --check-only     # compare without rerunning
 
-Steps: (1) check that the inputs exist, (2) validate the ABT, (3) snapshot the
+Steps: (1) check that the inputs exist, (2) check that data/processed/abt.csv
+is byte-for-byte the published ABT (version 1; the corrected table from
+src.pipeline is validated separately), (3) snapshot the
 committed outputs/camera_ready/results.json, (4) run
 scripts/camera_ready_experiments.py, (5) compare every number with the
 snapshot. The paper reports at most three decimals, so values that differ by
 less than --tol (default 5e-4) count as reproduced; Random Forest's parallel
 training jitters some metrics around the sixth decimal.
-Exits non-zero if validation fails or any number differs.
+Exits non-zero if the ABT is not the published one, validation of the
+corrected table fails, or any number differs.
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import subprocess
 import sys
@@ -34,6 +38,9 @@ from src.validation import assert_valid  # noqa: E402
 
 RESULTS = DATA_PATHS["outputs"] / "camera_ready" / "results.json"
 ABT = DATA_PATHS["processed"] / "abt.csv"
+ABT_CLEAN = DATA_PATHS["processed"] / "abt_clean.csv"
+# SHA-256 of the published ABT (version 1) behind every number in the paper.
+PUBLISHED_ABT_SHA256 = "88665ebeed431549b8f4cea88b908241f278872f9c3823b49ad5dd8dce194322"
 RAW = DATA_PATHS["raw"]
 
 # Inputs each experiment stage reads beyond the ABT.
@@ -41,9 +48,10 @@ STAGE_INPUTS = {
     "frpi": [RAW / "ihp_foodneed_by_zip.csv"],
     "forecast": [RAW / "ibtracs_na.csv", RAW / "zcta_gazetteer_2020.txt"],
     "acs": [RAW / f"acs5_{y}_zcta.csv" for y in (2016, 2017, 2018, 2020, 2021, 2022, 2023, 2024)],
+    "cleaned": [ABT_CLEAN],
 }
 ALL_STAGES = ["main", "binning", "selection", "calibration", "formulation", "loho",
-              "zip", "ablation", "frpi", "forecast", "acs", "figures"]
+              "zip", "ablation", "frpi", "forecast", "acs", "cleaned", "figures"]
 
 
 def _leaves(obj, path: str = "") -> Iterator[Tuple[str, object]]:
@@ -117,17 +125,25 @@ def main(argv=None) -> int:
         missing = missing_inputs(stages)
     if missing:
         print("Missing inputs:\n  " + "\n  ".join(str(p.relative_to(ROOT)) for p in missing))
-        print("Get the ABT from the share bundle (README) and run with --fetch "
+        print("Get the ABT from the share bundle (README), build abt_clean.csv with "
+              "python -m src.pipeline --from features, and run with --fetch "
               "(ACS needs CENSUS_API_KEY).")
         return 2
 
-    print("== validating ABT ==")
-    try:
-        for issue in assert_valid(pd.read_csv(ABT, dtype={"zip_code": str})):
-            print(" ", issue)
-    except ValueError as e:
-        print(e)
+    print("== checking the published ABT ==")
+    digest = hashlib.sha256(ABT.read_bytes()).hexdigest()
+    if digest != PUBLISHED_ABT_SHA256:
+        print(f"{ABT.relative_to(ROOT)} is not the published ABT (sha256 {digest[:12]}...); "
+              "restore it from the share bundle")
         return 1
+    if ABT_CLEAN.exists():
+        print("== validating the corrected ABT ==")
+        try:
+            for issue in assert_valid(pd.read_csv(ABT_CLEAN, dtype={"zip_code": str})):
+                print(" ", issue)
+        except ValueError as e:
+            print(e)
+            return 1
 
     reference = committed_reference()
     if not args.check_only:

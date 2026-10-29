@@ -17,10 +17,13 @@ the reviewers asked for:
   frpi         ranking error propagation, circularity, IHP foodNeed validation (R4)
   forecast     NHC-scale track/intensity forecast-error stress test (R3)
   acs          year-matched ACS vintages vs static 2021 (R1)
+  cleaned      the same models on data/processed/abt_clean.csv, the ABT with
+               mis-keyed ZIPs removed and Census codes cleared (src.pipeline)
   figures      plots built from results.json (forecast lead-time skill)
 
 Usage:  python scripts/camera_ready_experiments.py [stage ...]   (default: all)
-Inputs: data/processed/abt.csv, plus data/raw/* from fetch_camera_ready_data.py
+Inputs: data/processed/abt.csv (the published ABT), plus data/raw/* from
+        fetch_camera_ready_data.py and, for `cleaned`, abt_clean.csv
 Output: outputs/camera_ready/results.json, *.csv, *.png
 """
 from __future__ import annotations
@@ -89,8 +92,8 @@ _cache: dict = {}
 # -----------------------------------------------------------------------------
 # Data and model helpers
 # -----------------------------------------------------------------------------
-def load_abt() -> pd.DataFrame:
-    df = pd.read_csv(DATA_PATHS["processed"] / "abt.csv", dtype={"zip_code": str})
+def load_abt(name: str = "abt.csv") -> pd.DataFrame:
+    df = pd.read_csv(DATA_PATHS["processed"] / name, dtype={"zip_code": str})
     df = df.dropna(subset=[TARGET_CLASS_COL]).reset_index(drop=True)
     df["y"] = df[TARGET_CLASS_COL].map({c: i for i, c in enumerate(CLASSES)})
     return df
@@ -905,10 +908,45 @@ def stage_figures(df):
     print("wrote", OUT / "forecast_lead_time.png")
 
 
+# -----------------------------------------------------------------------------
+# Stage: cleaned data
+# -----------------------------------------------------------------------------
+def stage_cleaned(_df):
+    """Model selection and TEST metrics on the corrected ABT (abt_clean.csv)."""
+    df = load_abt("abt_clean.csv")
+    out = {"rows": {s: int((df["train_test_split"] == s).sum()) for s in ("TRAIN", "VAL", "TEST")}}
+    dropped = DATA_PATHS["processed"] / "abt_dropped_rows.csv"
+    if dropped.exists():
+        out["rows_removed"] = int(len(pd.read_csv(dropped)))
+
+    dev = df[df["train_test_split"] != "TEST"]
+    sel = {}
+    for name in ["xgb", "rf", "svm", "lr", "nb"]:
+        aucs = [macro_auc(g["y"].to_numpy(),
+                          proba_full(fit(dev[dev["disaster_number"] != dn], name), g[FEATURES]))
+                for dn, g in dev.groupby("disaster_number")]
+        sel[MODEL_NAMES[name]] = {"mean": float(np.mean(aucs)), "std": float(np.std(aucs, ddof=1))}
+    out["selection_auc_macro"] = sel
+    print("  LOSO dev AUC:", {k: round(v["mean"], 3) for k, v in sel.items()})
+
+    tr, va, te = split(df, "TRAIN"), split(df, "VAL"), split(df, "TEST")
+    out["test"] = {}
+    for name in ["xgb", "lr"]:
+        m = fit(tr, name)
+        out["test"][MODEL_NAMES[name]] = clf_metrics(te["y"].to_numpy(), proba_full(m, te[FEATURES]))
+        if name == "xgb":
+            p_cal = calibrate(m, va).predict_proba(te[FEATURES])
+            out["test"]["XGBoost"]["auc_high_or_severe_calibrated"] = binary_auc(
+                te["y"].isin(HS), p_cal[:, HS].sum(axis=1))
+        print(f"  {MODEL_NAMES[name]} TEST:", fmt(out["test"][MODEL_NAMES[name]]))
+    RESULTS["cleaned"] = out
+
+
 STAGES = {
     "main": stage_main, "binning": stage_binning, "selection": stage_selection, "calibration": stage_calibration, "formulation": stage_formulation,
     "loho": stage_loho, "zip": stage_zip, "ablation": stage_ablation, "frpi": stage_frpi,
-    "forecast": stage_forecast, "acs": stage_acs, "figures": stage_figures,
+    "forecast": stage_forecast, "acs": stage_acs, "cleaned": stage_cleaned,
+    "figures": stage_figures,
 }
 
 if __name__ == "__main__":

@@ -14,9 +14,14 @@ unless --force is given or an earlier stage reran):
              FEMA owners+renters per (disaster, ZIP), joined with ACS shares,
              SVI / Food Atlas / NRI aggregated from tracts, SNAP retailers,
              geodesic distance to each storm track and the NFHL overlay
-  features   data/processed/abt.csv (+ abt_dropped_rows.csv)
+  features   data/processed/abt_clean.csv (+ abt_dropped_rows.csv)
              splits, targets, severity classes, imputation, finalize_abt,
              then src.validation; refuses to write an ABT with errors
+
+The paper's results come from data/processed/abt.csv, the ABT as published
+(version 1, in the share bundle). It predates the fixes in finalize_abt and
+is kept frozen; abt_clean.csv is the corrected table and feeds the paper's
+"cleaned data" robustness check (scripts/camera_ready_experiments.py cleaned).
 
 This replaces running notebooks 01, 03 and 04 by hand; the notebooks remain
 for exploration. Logs go to stderr and data/interim/pipeline.log.
@@ -51,7 +56,7 @@ def default_paths(root: Optional[Path] = None) -> Dict[str, Path]:
     return {
         "raw": raw,
         "fused": interim / "fused_zip_hurricane.csv",
-        "abt": processed / "abt.csv",
+        "abt": processed / "abt_clean.csv",
         "dropped": processed / "abt_dropped_rows.csv",
         "log": interim / "pipeline.log",
     }
