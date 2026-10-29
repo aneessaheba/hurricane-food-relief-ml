@@ -291,9 +291,9 @@ assigned when the tract-weighted LILA share $\geq 0.5$.
 
 \textbf{5. USDA SNAP Retailer Historical Locator:}
 Authorized SNAP retailer point locations spatially joined to ZCTA
-polygons (EPSG:4326) to compute per-ZIP retailer counts and
-geodesic distance to the nearest supermarket (pyproj.Geod,
-WGS84).
+polygons (EPSG:4326) to compute per-ZIP retailer counts and the
+distance from each ZCTA polygon to the nearest supermarket in
+EPSG:5070 (zero when one lies inside the ZIP).
 
 \textbf{6. FEMA National Risk Index (NRI, Census Tract):}
 Coastal flood risk score (\texttt{CFLD\_RISKS}) and hurricane
@@ -719,6 +719,7 @@ Forecast-quality storm inputs, 24\,h       & 0.73$\pm$0.03 & 0.69$\pm$0.06 \\
 \midrule
 Static 2021 ACS (rebuilt)                  & 0.781 & 0.781 \\
 Year-matched ACS (2016--2024)              & 0.783 & 0.729 \\
+Mis-keyed ZIPs removed (245 rows)          & 0.778 & 0.806 \\
 \bottomrule
 \multicolumn{3}{p{0.94\columnwidth}}{\footnotesize $\pm$: standard
 deviation across storms (LOHO, expanding) or across 20 forecast-error
@@ -758,6 +759,18 @@ while precision rises from 0.50 to 0.52, so the vintage mainly
 shifts the Severe decision boundary rather than the model's
 ranking. SVI (biennial, tract-level) and the 2019 Food Access
 Research Atlas were not re-matched.
+
+\textbf{Data cleaning.} A later data audit found 245 rows (4.4\%,
+231 of them Low) whose ZIP code lies outside the state of their
+FEMA record (e.g., New York ZIPs on Louisiana Ida records), and 251
+rows carrying the Census not-available code in median income.
+Removing those rows and imputing the codes changes TEST results
+little (Table~\ref{tab:robust}; 2,500 TEST rows), but logistic
+regression, which the extreme code had distorted, now edges XGBoost
+on the development storms (macro ROC-AUC 0.697 vs.\ 0.693, within
+the $\pm$0.09 storm-to-storm spread). We report the pre-specified
+analysis on the original data; the corrected pipeline is part of
+the code release.
 
 \textbf{Forecast error.} To mimic pre-landfall use, we displace
 each TEST storm's entire track perpendicular to its heading by a
