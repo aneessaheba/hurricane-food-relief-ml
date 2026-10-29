@@ -157,3 +157,44 @@ def test_derive_demographic_shares_population_denominators():
     # Without total_households, renters fall back to population (as in the published ABT).
     out = derive_demographic_shares(df.assign(renters=[300.0]))
     assert out["pct_renters"].iloc[0] == pytest.approx(30.0)
+
+
+# ---------------------------------------------------------------------------
+# ABT finalization
+# ---------------------------------------------------------------------------
+from src.feature_engineering import clean_census_sentinels, finalize_abt
+
+
+def test_clean_census_sentinels():
+    df = pd.DataFrame({"median_income": [-666666666.0, 50000.0], "x": [-999999999, 3],
+                       "svi_overall": [-999.0, 0.2]})
+    out = clean_census_sentinels(df)
+    assert out["median_income"].isna().tolist() == [True, False]
+    assert out["x"].isna().tolist() == [True, False]
+    assert out["svi_overall"].iloc[0] == -999.0  # SVI's own code is handled separately
+
+
+def test_impute_missing_replaces_census_codes_with_state_median():
+    df = pd.DataFrame({"state": ["LA", "LA", "LA"],
+                       "median_income": [-666666666.0, 40000.0, 60000.0]})
+    assert impute_missing(df)["median_income"].tolist() == [50000.0, 40000.0, 60000.0]
+
+
+def test_derive_demographic_shares_caps_at_100():
+    df = pd.DataFrame({"population": [40.0], "mobile_homes": [223.0]})
+    assert derive_demographic_shares(df)["pct_mobile_homes"].iloc[0] == 100.0
+
+
+def test_finalize_abt():
+    df = pd.DataFrame({
+        "zip_code": ["70112", "70113", "70114", "10466"],
+        "state": ["LA", "LA", "LA", "LA"],
+        "hurricane_name": ["Ida"] * 4,
+        "median_income": [-666666666.0, 40000.0, 60000.0, 1.0],
+        "pct_mobile_homes": [557.5, 2.0, 3.0, 4.0],
+    })
+    abt, dropped = finalize_abt(df)
+    assert dropped["zip_code"].tolist() == ["10466"]
+    assert abt["zip_code"].tolist() == ["70112", "70113", "70114"]
+    assert abt["median_income"].tolist() == [50000.0, 40000.0, 60000.0]
+    assert abt["pct_mobile_homes"].tolist() == [100.0, 2.0, 3.0]

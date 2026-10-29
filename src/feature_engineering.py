@@ -1,10 +1,12 @@
 """
 Feature engineering: compute targets, bin severity class, assign splits,
-and impute missing values group by group.
+impute missing values group by group, and finalize the ABT (drop mis-keyed
+ZIPs, clear Census "not available" codes, keep shares within 0-100%).
 """
 from __future__ import annotations
 
-from typing import Dict, List
+import logging
+from typing import Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -13,6 +15,12 @@ from config import (
     HURRICANE_META, SEVERITY_BINS, SEVERITY_LABELS,
     FEATURE_GROUPS,
 )
+
+log = logging.getLogger(__name__)
+
+# ACS publishes "estimate not available" as large negative codes such as
+# -666666666 (median income) or -999999999; anything this low is one of them.
+CENSUS_SENTINEL_MAX = -100_000_000
 
 
 # -----------------------------------------------------------------------------
@@ -58,8 +66,8 @@ def bin_severity(
     out = pd.cut(s, bins=bins, labels=labels, include_lowest=True)
     counts = out.value_counts(normalize=True, dropna=True)
     if not counts.empty and counts.max() > qcut_fallback_threshold:
-        print(f"[warn] severity binning dominated by one class "
-              f"({counts.idxmax()}={counts.max():.1%}); falling back to qcut")
+        log.warning("severity binning dominated by one class (%s=%.1f%%); "
+                    "falling back to qcut", counts.idxmax(), 100 * counts.max())
         _, bin_edges = pd.qcut(s, q=4, retbins=True, duplicates="drop")
         n_bins = len(bin_edges) - 1
         out = pd.qcut(s, q=4, labels=labels[:n_bins], duplicates="drop")
@@ -99,15 +107,28 @@ def _state_median_impute(df: pd.DataFrame, cols: List[str]) -> pd.DataFrame:
     return df
 
 
+def clean_census_sentinels(df: pd.DataFrame) -> pd.DataFrame:
+    """Replace ACS "not available" codes (e.g. -666666666) with NaN."""
+    df = df.copy()
+    num = df.select_dtypes("number").columns
+    mask = df[num] <= CENSUS_SENTINEL_MAX
+    if mask.any().any():
+        log.info("cleared Census not-available codes: %s",
+                 {c: int(n) for c, n in mask.sum().items() if n})
+        df[num] = df[num].mask(mask)
+    return df
+
+
 def impute_missing(df: pd.DataFrame) -> pd.DataFrame:
     """
     Impute per the project spec:
+      * Census "not available" codes (e.g. -666666666) -> NaN first
       * SVI columns: -999 -> NaN -> state-median
       * Food access columns: NaN -> 0 and add food_data_missing flag
       * Flood column: NaN -> 0 (not mapped == not in flood zone)
       * Others: < 5% missing -> median impute within state
     """
-    df = df.copy()
+    df = clean_census_sentinels(df)
 
     # SVI: -999 sentinel already stripped in acquisition but re-assert
     svi_cols = FEATURE_GROUPS["svi"]
@@ -167,4 +188,38 @@ def derive_demographic_shares(df: pd.DataFrame) -> pd.DataFrame:
     if "mobile_homes" in df.columns:
         df["pct_mobile_homes"] = df["mobile_homes"] / pop * 100
 
+    # Population denominators can be smaller than housing counts in ZIPs with
+    # very few residents (e.g. 223 mobile homes, 40 people); a share is <= 100%.
+    shares = [c for c in ("pct_poverty", "pct_renters", "pct_elderly_65plus", "pct_minority",
+                          "pct_no_vehicle", "pct_mobile_homes") if c in df.columns]
+    df[shares] = df[shares].clip(0, 100)
     return df
+
+
+# -----------------------------------------------------------------------------
+# Final ABT clean-up
+# -----------------------------------------------------------------------------
+def finalize_abt(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Last step before the ABT is written:
+      * drop rows whose ZIP does not belong to the record's state (mis-keyed
+        FEMA ZIPs, see data_fusion.drop_mismatched_zips)
+      * clear Census "not available" codes and state-median impute the
+        demographic columns they hit
+      * keep demographic shares within 0-100%
+    Returns (abt, dropped_rows).
+    """
+    from src.data_fusion import drop_mismatched_zips
+
+    kept, dropped = drop_mismatched_zips(df)
+    if len(dropped):
+        log.info("dropped %d rows with ZIPs outside their state (%s)",
+                 len(dropped), dropped.groupby("hurricane_name").size().to_dict()
+                 if "hurricane_name" in dropped else "")
+    kept = clean_census_sentinels(kept)
+    kept = _state_median_impute(kept, [c for c in FEATURE_GROUPS["demographics"]
+                                       if c in kept.columns and kept[c].isna().any()])
+    shares = [c for c in FEATURE_GROUPS["demographics"]
+              if c.startswith("pct_") and c in kept.columns]
+    kept[shares] = kept[shares].clip(0, 100)
+    return kept.reset_index(drop=True), dropped

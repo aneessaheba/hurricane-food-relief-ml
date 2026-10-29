@@ -91,6 +91,12 @@ def validate_abt(df: pd.DataFrame) -> List[Issue]:
         _issue(issues, "warning", c, (df[c] < 0) | (df[c] > 100),
                "outside 0-100%")
 
+    if "state" in df.columns:
+        from src.data_fusion import zip_matches_state
+        wrong = [not zip_matches_state(z, s) for z, s in zip(zips, df["state"])]
+        _issue(issues, "error", "zip_state", pd.Series(wrong, index=df.index),
+               "whose ZIP does not belong to their state (mis-keyed; see finalize_abt)")
+
     if "distance_to_track_km" in df.columns:
         _issue(issues, "warning", "distance_to_track_km",
                df["distance_to_track_km"] > FAR_FROM_TRACK_KM,

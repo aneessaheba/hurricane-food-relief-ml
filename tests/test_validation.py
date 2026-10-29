@@ -59,7 +59,6 @@ def test_hard_errors(abt, col, value, check):
     ("median_income", -666666666.0, "median_income"),
     ("pct_poverty", 557.5, "pct_poverty"),
     ("distance_to_track_km", 2050.0, "distance_to_track_km"),
-    ("state", "CA", "state"),
 ])
 def test_suspicious_values_are_warnings(abt, col, value, check):
     abt.loc[2, col] = value
@@ -125,3 +124,15 @@ def test_dictionary_flags_undocumented_wrong_type_and_bad_binary():
     assert any("population: documented as float" in m for m in msgs)
     assert any("binary value other than 0/1" in m for m in msgs)
     assert any("[warning]" in m and "median_income" in m for m in msgs)
+
+
+def test_zip_from_another_state_is_an_error(abt):
+    abt.loc[0, "zip_code"] = "10466"  # New York ZIP on a Louisiana record
+    assert "zip_state" in checks(validate_abt(abt), "error")
+
+
+def test_neighboring_state_zip_is_a_warning(abt):
+    # A real Louisiana ZIP on a Harvey record: Harvey's declaration is Texas only.
+    abt.loc[2, ["zip_code", "state"]] = ["70663", "LA"]
+    issues = assert_valid(abt)
+    assert "state" in checks(issues, "warning")

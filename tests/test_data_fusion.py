@@ -225,3 +225,28 @@ def test_snap_retailers_per_zip_counts_and_supermarket_distance():
     # The supermarket lies inside 33001; 33002 is roughly 40 km (25 mi) east.
     assert out.loc["33001", "dist_nearest_supermarket_mi"] == pytest.approx(0.0)
     assert 20 < out.loc["33002", "dist_nearest_supermarket_mi"] < 30
+
+
+# ---------------------------------------------------------------------------
+# ZIP / state consistency
+# ---------------------------------------------------------------------------
+from src.data_fusion import drop_mismatched_zips, zip_matches_state
+
+
+@pytest.mark.parametrize("zip_code,state,expected", [
+    ("70112", "LA", True), ("10466", "LA", False),     # Ida record with a NY ZIP
+    ("33401", "FL", True), ("34002", "FL", False),     # 340 is military mail (AA)
+    ("39501", "MS", True), ("39901", "GA", True),      # 395 MS, 399 GA
+    ("00738", "FL", False), ("00738", "PR", False),    # PR is not a declaration state
+    ("25262", "NC", False), ("7764", "LA", False),     # WV ZIP; NJ ZIP 07764
+    ("ABCDE", "TX", False),
+])
+def test_zip_matches_state(zip_code, state, expected):
+    assert zip_matches_state(zip_code, state) is expected
+
+
+def test_drop_mismatched_zips_splits_rows():
+    df = pd.DataFrame({"zip_code": ["70112", "10466", "77002"], "state": ["LA", "LA", "TX"]})
+    kept, dropped = drop_mismatched_zips(df)
+    assert kept["zip_code"].tolist() == ["70112", "77002"]
+    assert dropped["zip_code"].tolist() == ["10466"]

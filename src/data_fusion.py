@@ -238,6 +238,45 @@ def pct_in_floodplain(
 
 
 # -----------------------------------------------------------------------------
+# ZIP / state consistency
+# -----------------------------------------------------------------------------
+# USPS 3-digit ZIP prefixes for the states the storms were declared in. A FEMA
+# record whose ZIP falls outside its own state's ranges is mis-keyed (e.g. an
+# Ida record in Louisiana carrying a New York ZIP) and is not a damaged ZIP of
+# that storm. States outside this table (PR, WV, OH, ...) are never declaration
+# states for the 14 storms, so their rows are dropped as well.
+USPS_ZIP3_RANGES = {
+    "AL": [(350, 369)],
+    "FL": [(320, 339), (341, 342), (344, 344), (346, 347), (349, 349)],
+    "GA": [(300, 319), (398, 399)],
+    "LA": [(700, 714)],
+    "MS": [(386, 397)],
+    "NC": [(270, 289)],
+    "SC": [(290, 299)],
+    "TN": [(370, 385)],
+    "TX": [(750, 799), (885, 885)],
+    "VA": [(201, 201), (220, 246)],
+}
+
+
+def zip_matches_state(zip_code: str, state: str) -> bool:
+    """True if `zip_code`'s 3-digit prefix belongs to `state` (USPS ranges)."""
+    z = str(zip_code).zfill(5)
+    if not z[:3].isdigit():
+        return False
+    prefix = int(z[:3])
+    return any(lo <= prefix <= hi for lo, hi in USPS_ZIP3_RANGES.get(str(state), []))
+
+
+def drop_mismatched_zips(df: pd.DataFrame, zip_col: str = "zip_code",
+                         state_col: str = "state") -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Split `df` into rows whose ZIP belongs to their state and the rest."""
+    ok = np.array([zip_matches_state(z, s) for z, s in zip(df[zip_col], df[state_col])],
+                  dtype=bool)
+    return df[ok].copy(), df[~ok].copy()
+
+
+# -----------------------------------------------------------------------------
 # Housing Assistance target assembly (OWNERS + RENTERS SUMMED, not averaged)
 # -----------------------------------------------------------------------------
 # The actual v2 schemas are ASYMMETRIC:
