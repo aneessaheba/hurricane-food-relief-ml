@@ -146,18 +146,19 @@ else:
     zip_pick = st.selectbox("Pick a zip from the table above",
                             sub["zip_code"].tolist())
     if zip_pick:
-        row = df[df["zip_code"] == zip_pick].iloc[0]
-        # Severe class SHAP (last axis, last class by encoder = 'Severe' alpha order)
-        idx = df.index.get_loc(row.name) if row.name in df.index else 0
+        # sub keeps df's row index, which matches the row order of shap_values.npy;
+        # looking up within sub picks this storm's row, not the ZIP's first storm.
+        idx = sub.index[sub["zip_code"] == zip_pick][0]
         try:
-            severe_class = -1  # last class by label-encoder alpha order = Severe
-            vals = sv[idx, :, severe_class]
             try:
                 model_pkg = load_model()
+                severe_class = list(model_pkg["label_encoder"].classes_).index("Severe")
                 pre = model_pkg["pipe"].named_steps["pre"]
-                feat_names = list(pre.get_feature_names_out())
+                feat_names = [n.split("__", 1)[-1] for n in pre.get_feature_names_out()]
             except Exception:
-                feat_names = [f"f{i}" for i in range(vals.shape[0])]
+                severe_class = -1  # label-encoder alpha order puts Severe last
+                feat_names = [f"f{i}" for i in range(sv.shape[1])]
+            vals = sv[idx, :, severe_class]
             contrib = (pd.DataFrame({"feature": feat_names, "shap": vals})
                        .assign(abs=lambda d: d["shap"].abs())
                        .sort_values("abs", ascending=False).head(5))
