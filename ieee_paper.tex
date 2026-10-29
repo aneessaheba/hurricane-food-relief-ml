@@ -1,5 +1,5 @@
 % ============================================================
-% IEEE BigData 2026 — Paper BigD261 (as submitted)
+% IEEE BigData 2026 — Paper BigD261 (camera-ready)
 % "Equitable Pre-Landfall Food Relief Prioritization via
 %  Multi-Source Machine Learning: A ZIP-Code Framework
 %  Across 14 Atlantic Hurricanes"
@@ -18,6 +18,9 @@
 \usepackage{amsmath,amssymb,amsfonts}
 \usepackage{algorithmic}
 \usepackage{graphicx}
+% Figures live in outputs/camera_ready/ in the repo; on Overleaf they can
+% sit next to the .tex. Both locations are searched.
+\graphicspath{{outputs/camera_ready/}{./}}
 \usepackage{textcomp}
 \usepackage{xcolor}
 \usepackage{booktabs}
@@ -36,35 +39,12 @@ via Multi-Source Machine Learning:\\
 A ZIP-Code Framework Across 14 Atlantic Hurricanes}
 
 \author{
-\IEEEauthorblockN{Anees Saheba Guddi}
-\IEEEauthorblockA{\textit{Dept. of Applied Data Intelligence}\\
-\textit{San Jos\'{e} State University}\\
-San Jose, CA, USA\\
-aneessaheba.guddi@sjsu.edu}
-\and
-\IEEEauthorblockN{Chaitanya Uppalapati}
-\IEEEauthorblockA{\textit{Dept. of Applied Data Intelligence}\\
-\textit{San Jos\'{e} State University}\\
-San Jose, CA, USA\\
-chaitanya.uppalapati@sjsu.edu}
-\and
-\IEEEauthorblockN{Chelsi Shulamite Elthuri}
-\IEEEauthorblockA{\textit{Dept. of Applied Data Intelligence}\\
-\textit{San Jos\'{e} State University}\\
-San Jose, CA, USA\\
-chelsishulamite.elthuri@sjsu.edu}
-\and
-\IEEEauthorblockN{Manjot Kaur}
-\IEEEauthorblockA{\textit{Dept. of Applied Data Intelligence}\\
-\textit{San Jos\'{e} State University}\\
-San Jose, CA, USA\\
-manjot.kaur02@sjsu.edu}
-\and
-\IEEEauthorblockN{Shih-Yu Chang}
-\IEEEauthorblockA{\textit{Dept. of Applied Data Intelligence}\\
-\textit{San Jos\'{e} State University}\\
-San Jose, CA, USA\\
-shihyu.chang@sjsu.edu}
+\IEEEauthorblockN{Anees Saheba Guddi, Chaitanya Uppalapati,
+Chelsi Shulamite Elthuri,\\ Manjot Kaur, Shih-Yu Chang, Simon Shim}
+\IEEEauthorblockA{Department of Applied Data Intelligence,
+San Jos\'{e} State University, San Jose, CA, USA\\
+\small \{aneessaheba.guddi, chaitanya.uppalapati,
+chelsishulamite.elthuri,\\ manjot.kaur02, shihyu.chang, simon.shim\}@sjsu.edu}
 }
 
 \maketitle
@@ -73,37 +53,37 @@ shihyu.chang@sjsu.edu}
 \begin{abstract}
 After a hurricane makes landfall, relief organizations face a
 critical allocation problem: which communities need food
-assistance most urgently? Traditional response frameworks rely
-on reactive damage assessments that arrive days after the event,
-too late to pre-position resources. We present a ZIP-code-level
-predictive framework that fuses eight administrative, demographic,
-and geospatial data sources to forecast food relief demand before
-post-event inspection data becomes available. Our analytic base
-table spans 14 Atlantic hurricanes (2016--2024), yielding 5,522
-ZIP-code$\times$hurricane observations across 10 states.
-We train a multi-class XGBoost classifier to predict damage
-severity (\textit{Low\,/\,Medium\,/\,High\,/\,Severe}) using
-pre-landfall demographic vulnerability, storm track geometry, and
-food-access indicators---explicitly excluding post-event FEMA
-inspection counts to prevent data leakage. A hurricane-grouped
-temporal train\,/\,validation\,/\,test split evaluates the model
-on five completely unseen storms (Ida, Ian, Idalia, Helene,
-Milton; 2021--2024). The best classifier achieves a macro
-ROC-AUC of 0.78 and a Severe-class recall of 0.82 on the
-held-out test set. Model-predicted risk is combined with a
-food-fragility composite score---aggregating food-desert flags,
+assistance most urgently? Damage assessments arrive days after
+the event, too late to pre-position resources. We present a
+ZIP-code-level framework that fuses eight administrative,
+demographic, and geospatial data sources to prioritize food
+relief before post-event inspection data becomes available. Our
+analytic base table spans 14 Atlantic hurricanes (2016--2024),
+yielding 5,522 ZIP-code$\times$hurricane observations across six
+states. A multi-class XGBoost classifier predicts FEMA-verified
+damage severity (\textit{Low\,/\,Medium\,/\,High\,/\,Severe})
+from community vulnerability, storm-track geometry, and
+food-access indicators, excluding post-event FEMA inspection
+counts from the inputs. On five held-out storms (Ida, Ian,
+Idalia, Helene, Milton; 2021--2024) it reaches a macro ROC-AUC
+of 0.78 and a Severe-class recall of 0.80; leave-one-hurricane-out
+evaluation over all 14 storms gives $0.76\pm0.08$, exposing
+substantial storm-to-storm variation. Isotonic-calibrated risk is
+combined with a food-fragility composite---food-desert flags,
 SNAP retailer density, supermarket proximity, and the CDC Social
 Vulnerability Index---into a \textit{Food Relief Priority Index}
-(FRPI). The top-50 priority ZIP codes are 100\% food deserts,
-rank in the 76th percentile of social vulnerability nationally,
-and experience 43$\times$ the actual FEMA-verified damage of the
-bottom-50. A Fairlearn equity audit confirms Severe-class recall
-increases monotonically across social vulnerability quartiles
-(SVI Q1: 0.65\,$\rightarrow$\,Q4: 0.89), demonstrating that
-predictive accuracy improves for the communities most at risk.
-An interactive Streamlit dashboard with per-ZIP SHAP explanations
-and Folium priority maps enables rapid situational awareness for
-relief coordinators.
+(FRPI). Within each held-out storm, 92\% of the FRPI top decile
+are ZIP codes FEMA later verified as High or Severe damage
+(base rate 50\%), and the FRPI's rank correlation with
+applicant-reported food need is 0.67, though that count largely
+mirrors damage. Because the model's skill depends on knowing the storm track,
+we stress-test it with National Hurricane Center-scale forecast
+errors: macro ROC-AUC falls to 0.73 at 24\,h and 0.64 at
+48--72\,h lead time. A Fairlearn audit finds Severe-class recall
+rising from 0.63 in the least to 0.87 in the most socially
+vulnerable quartile; we discuss why this alone does not establish
+equitable allocation. A Streamlit dashboard with per-ZIP SHAP
+explanations supports human-in-the-loop decisions.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -115,21 +95,19 @@ preparedness, ZIP-code prediction, FEMA
 % ============================================================
 \section{Introduction}
 
-Hurricanes are the costliest natural disasters in the United
-States, responsible for over \$1.1 trillion in damages since
-1980~\cite{noaa_billion_dollar}. Beyond physical destruction,
+Tropical cyclones are the costliest U.S. weather disasters,
+accounting for more than half of all billion-dollar disaster
+losses since 1980~\cite{noaa_billion_dollar}. Beyond physical destruction,
 hurricanes trigger acute food-access crises: supply chains
 collapse, grocery stores lose power, and food-insecure households
-face simultaneous income loss and resource scarcity. Prior to a
-major storm, an estimated 10.5\% of U.S. households already
-experience food insecurity~\cite{coleman_jensen_food};
-post-disaster prevalence has been documented to substantially
-exceed state-level baseline rates following every major U.S.
-hurricane studied~\cite{garney_harvey_food, broyles_ida_food}.
+face simultaneous income loss and resource scarcity. Even before a
+major storm, an estimated 12.8\% of U.S. households experienced
+food insecurity in 2022~\cite{coleman_jensen_food}, and studies
+after Hurricanes Harvey and Ida document post-storm food
+insecurity and uneven access to emergency food~\cite{garney_harvey_food, broyles_ida_food}.
 Federal and non-governmental relief organizations must rapidly
 allocate food and nutrition resources across hundreds of affected
-ZIP codes, yet ground-truth damage assessments from FEMA
-inspectors routinely take three to seven days to process after
+ZIP codes, yet FEMA inspection data arrive only days to weeks after
 landfall~\cite{fema_response_timeline}.
 
 This delay creates a critical operational gap: relief
@@ -152,43 +130,34 @@ at the sub-county level using pre-landfall community data.
 Existing hurricane damage models largely predict continuous
 economic loss rather than categorical relief priority
 \cite{hurricane_damage_models}, and few incorporate food-access
-indicators or formal equity constraints. Critically, most prior
-work evaluates models on random holdout splits that allow
-ZIP-code overlap across training and test sets, inflating
-reported accuracy. Our hurricane-grouped temporal split --- where
-the five TEST storms (2021--2024) are never seen during training
-or validation --- provides a strictly harder and more realistic
-generalization benchmark.
+indicators or formal equity constraints. Many evaluations also
+use random row-level splits that mix observations from the same
+event across training and test sets. We instead hold out entire
+storms and report how performance varies across them.
 
 \subsection{Contributions}
 This paper makes four principal contributions:
 \begin{enumerate}
-    \item \textbf{A leakage-resistant pre-landfall humanitarian
-    triage framework} --- a hurricane-grouped temporal split
-    evaluated on five completely unseen storms ensures that
-    reported metrics reflect genuine out-of-distribution
-    generalization, not in-sample overfitting. This evaluation
-    design is the paper's primary methodological differentiator
-    from prior disaster ML work.
+    \item \textbf{A storm-held-out evaluation of pre-landfall
+    damage triage} --- a temporal split on five unseen storms,
+    leave-one-hurricane-out and expanding-window evaluation over
+    all 14 storms, a ZIP-disjoint control, and a stress test with
+    NHC-scale track and intensity forecast errors that measures
+    how much skill survives at realistic lead times.
     \item \textbf{Integration of food-fragility geography with
-    disaster-risk modeling} --- by fusing food-desert flags, SNAP
-    retailer density, supermarket proximity, and the CDC Social
-    Vulnerability Index with storm-track and damage-risk features,
-    we produce the first ZIP-code-level food relief priority index
-    validated against withheld FEMA ground-truth damage records.
-    \item \textbf{An operationally deployable equitable triage
-    framework} --- the \textit{Food Relief Priority Index} (FRPI)
-    is designed for direct use by logistics coordinators via a
-    Streamlit dashboard requiring no ML expertise, with per-ZIP
-    SHAP explanations supporting accountability in
-    federally-funded relief programs.
-    \item \textbf{A formal equity audit confirming pro-equity
-    model behavior} --- Severe-class recall increases
-    monotonically across social vulnerability quartiles
-    (Q1: 0.65\,$\rightarrow$\,Q4: 0.89), demonstrating that the
-    framework is safer to deploy in humanitarian contexts than
-    conventional damage models that ignore community
-    vulnerability.
+    disaster-risk modeling} --- a ZIP-code-level \textit{Food Relief
+    Priority Index} (FRPI) that combines calibrated damage risk
+    with food-access and social-vulnerability indicators,
+    validated against withheld FEMA damage records and against
+    applicant-reported food need.
+    \item \textbf{A decision-support dashboard} --- a Streamlit
+    interface with per-ZIP SHAP explanations, designed to inform
+    rather than replace emergency managers' allocation decisions.
+    \item \textbf{An equity audit with stated limits} ---
+    Severe-class recall rises across social vulnerability
+    quartiles (Q1: 0.63\,$\rightarrow$\,Q4: 0.87), but predicted
+    Severe rates also outpace observed base rates, and FEMA
+    labels may encode registration disparities; we report both.
 \end{enumerate}
 
 The remainder of this paper is organized as follows:
@@ -208,20 +177,16 @@ Machine learning has been applied to disaster response across
 several domains. Imran~et~al.~\cite{imran_social_media} surveyed
 social media processing for mass emergencies;
 Castillo~et~al.~\cite{castillo_credibility} explored information
-credibility in crisis events. Wang~et~al.
-\cite{wang_disaster_logistics} applied optimization to
-post-disaster logistics, while Nateghi~et~al.
+credibility on Twitter. Wang~et~al.
+\cite{wang_disaster_logistics} studied facility-location
+optimization under uncertainty, a building block of relief
+pre-positioning, while Nateghi~et~al.
 \cite{nateghi_power_outage} predicted hurricane-induced power
-outages using gradient-boosted trees.
+outages using tree-based ensemble models.
 Nguyen~et~al.~\cite{nguyen_damage_imagery} applied convolutional
-neural networks to satellite imagery for post-disaster building
-damage detection, demonstrating strong per-event performance but
-noting limited generalization across geographically distinct
-disasters --- the same challenge our hurricane-grouped temporal
-split is designed to address. Alam~et~al.~\cite{alam_crisismmd}
-introduced a multimodal benchmark for humanitarian computing that
-established standard evaluation protocols for crisis-related
-classification tasks. Our work differs from all of the above in
+neural networks to social-media imagery for disaster damage
+assessment, and Alam~et~al.~\cite{alam_crisismmd} released
+CrisisMMD, a multimodal dataset of disaster-related tweets. Our work differs from all of the above in
 targeting \textit{pre-landfall food-specific relief demand} using
 administrative and demographic data rather than post-event
 imagery or social media signals.
@@ -229,15 +194,10 @@ imagery or social media signals.
 \subsection{Food Insecurity and Natural Disasters}
 Chakraborty~et~al.~\cite{chakraborty_harvey} documented the
 disproportionate impacts of Hurricane Harvey on socially
-vulnerable populations. Mayer~et~al.~\cite{mayer_food_disaster}
-examined food insecurity trajectories after disasters, finding
-that pre-existing food access deficits predict post-disaster
-nutritional vulnerability. Flanagan~et~al.~\cite{flanagan_svi_2018}
-documented that communities with pre-existing food access
-barriers experienced significantly worse food security outcomes
-following COVID-19-level supply disruptions, a pattern directly
-analogous to hurricane-induced supply chain collapse and
-motivating our incorporation of USDA food-access indicators.
+vulnerable populations. Clay~et~al.~\cite{clay_katrina_food} found that 23\% of
+households heavily affected by Hurricane Katrina remained food
+insecure five years later, with social support and self-efficacy
+protective.
 The USDA Food Access Research Atlas~\cite{usda_food_atlas}
 provides the community-level food-access indicators our model
 incorporates.
@@ -248,36 +208,26 @@ been widely used to identify communities at heightened disaster
 risk. Cutter~et~al.~\cite{cutter_svi} established the social
 vulnerability framework that informs our feature design.
 Mehrabi~et~al.~\cite{mehrabi_fairness} surveyed bias and
-fairness in ML systems; our Fairlearn-based equity audit follows
-the framework of Bird~et~al.~\cite{bird_fairlearn}, which defines
-demographic parity ratio and equalized odds difference as primary
-fairness metrics. Work on equity in clinical ML deployment has
-established that audits stratified by demographic subgroup are
-now expected practice when predictive models affect resource
-allocation for vulnerable populations~\cite{rajpurkar_chexnext}.
+fairness in ML systems; our equity audit uses the Fairlearn
+toolkit of Bird~et~al.~\cite{bird_fairlearn}, which implements
+the demographic parity ratio and equalized odds difference.
 
 \subsection{Probabilistic Calibration in ML Systems}
-Guo~et~al.~\cite{guo_calibration} established that modern
-gradient-boosted classifiers are systematically over-confident
-and introduced temperature scaling and isotonic regression as
-standard post-hoc calibration methods. Our Brier score analysis
-(Section~\ref{sec:clf_results}) directly engages with this
-literature: the Severe-class over-confidence identified in the
-reliability diagram is consistent with Guo~et~al.'s findings on
-imbalanced classification tasks, and Platt scaling is identified
-as the appropriate correction if operational precision becomes
-critical.
+Guo~et~al.~\cite{guo_calibration} showed that modern classifiers
+are often over-confident and compared post-hoc corrections
+including Platt scaling, temperature scaling, and isotonic
+regression. Because the FRPI consumes class probabilities
+directly, we apply isotonic calibration before computing the
+index (Section~\ref{sec:clf_results}).
 
 \subsection{Explainable AI for Humanitarian Systems}
 SHAP (SHapley Additive exPlanations)~\cite{lundberg_shap}
-provides model-agnostic feature attribution that is critical for
+provides model-agnostic feature attribution that is useful for
 operational trust in humanitarian settings. We employ TreeSHAP
 for the XGBoost classifier to generate per-ZIP explanations in
 the deployment dashboard. Arrieta~et~al.~\cite{arrieta_xai}
-surveyed explainable AI methods for high-stakes deployment
-contexts, noting that post-hoc explanation tools are increasingly
-required when algorithmic outputs influence resource allocation
-for vulnerable populations.
+surveyed explainable AI for responsible deployment in
+high-stakes settings.
 
 To our knowledge, no prior work combines pre-landfall ML-based
 damage prediction with food-access geography, a composite relief
@@ -306,7 +256,7 @@ count, then sum owner and renter populations per (disaster, ZIP)
 to prevent Cartesian explosion when a ZIP spans multiple counties.
 
 \textbf{2. Census ACS 5-Year (2021):}
-Nineteen variables queried at the ZCTA level via the Census API,
+Twenty variables queried at the ZCTA level via the Census API,
 including total population (B01003), median household income
 (B19013), poverty count (B17001), renter-occupied units (B25003),
 age-disaggregated elderly counts, racial composition, no-vehicle
@@ -321,8 +271,8 @@ using residential-ratio weighted averaging.
 
 \textbf{4. USDA Food Access Research Atlas (2019):}
 Tract-level LILA (Low-Income, Low-Access) flags, low-access
-low-income population counts, SNAP participation rates, and
-vehicle-access food-access indicators, aggregated to ZIP via the
+low-income population counts, and the number of housing units
+receiving SNAP (\texttt{TractSNAP}), aggregated to ZIP via the
 same HUD crosswalk. A binary \texttt{food\_desert\_flag} is
 assigned when the tract-weighted LILA share $\geq 0.5$.
 
@@ -335,8 +285,9 @@ WGS84).
 \textbf{6. FEMA National Risk Index (NRI, Census Tract):}
 Coastal flood risk score (\texttt{CFLD\_RISKS}) and hurricane
 hazard risk score (\texttt{HRCN\_RISKS}) aggregated from census
-tracts to ZIP via the HUD crosswalk. The NRI replaced the
-discontinued FEMA NFHL ZIP-level dataset (2025).
+tracts to ZIP via the HUD crosswalk. These scores supplement an
+NFHL floodplain overlay (\texttt{pct\_in\_100yr\_floodplain}) that
+is available for only 2\% of rows.
 
 \textbf{7. NOAA IBTrACS v04r01~\cite{knapp_ibtracs}:}
 Storm track coordinates for each hurricane. Geodesic distance
@@ -346,8 +297,18 @@ via \texttt{pyproj.Geod.inv}, never Euclidean distance.
 
 \textbf{8. HUD USPS TRACT-ZIP Crosswalk:}
 Residential-ratio weighted crosswalk used to aggregate all
-tract-level data sources to ZIP codes, preserving area
-proportionality.
+tract-level data sources to ZIP codes, preserving the share of
+residential addresses in each tract.
+
+\textbf{Temporal resolution of storm features.}
+\texttt{distance\_to\_track\_km} is ZIP-specific but is measured
+to the \textit{observed} best track, and \texttt{max\_wind\_speed\_kt}
+and \texttt{hurricane\_category} are storm-level constants (the
+storm's lifetime peak), not ZIP-level winds. All three are
+therefore known exactly only in hindsight. Every other feature
+is static and available before the storm season.
+Section~\ref{sec:robust} replaces the storm features with
+forecast-quality values to measure what survives before landfall.
 
 \subsection{Dataset Construction}
 
@@ -356,11 +317,15 @@ We include 14 Atlantic hurricanes from 2016 to 2024 that
 activated FEMA Individual Assistance programs with
 ZIP-code-level housing assistance records (Table~\ref{tab:hurricanes}).
 Nicholas (2021) and Dorian (2019) are excluded due to absence
-of FEMA IA records. The temporal split is strictly hurricane-level:
+of FEMA IA records. The split is strictly hurricane-level:
 TRAIN (2016--2018, 5 storms), VAL (2020, 4 storms), and TEST
-(2021--2024, 5 storms). This prevents any ZIP-code from appearing
-in both training and evaluation, eliminating spatial and temporal
-data leakage.
+(2021--2024, 5 storms). Each storm is represented by its primary
+state's FEMA Individual Assistance declaration (e.g., Helene:
+Georgia; Ida: Louisiana), so multi-state storms are covered only
+in that state. Storms, not ZIP codes, are held out:
+80\% of TEST rows are ZIP codes that also appear in an earlier
+storm. Section~\ref{sec:robust} shows
+that removing these ZIPs from training leaves results unchanged.
 
 \begin{table}[htbp]
 \caption{Hurricane Dataset Split Summary}
@@ -374,20 +339,22 @@ data leakage.
 \textbf{Rows} & \textbf{States} \\
 \midrule
 TRAIN & Matthew, Harvey, Irma, Florence, Michael & 2016--18 & 5 &
-1,847 & FL, TX, LA, NC, SC, GA \\
+2,323 & FL, TX, NC \\
 \midrule
-VAL   & Laura, Sally, Delta, Zeta & 2020 & 4 & 1,088 &
-LA, AL, FL, MS \\
+VAL   & Laura, Sally, Delta, Zeta & 2020 & 4 & 612 &
+LA, AL \\
 \midrule
 TEST  & Ida, Ian, Idalia, Helene, Milton & 2021--24 & 5 & 2,587 &
-LA, FL, GA, SC, NC, TN \\
+LA, FL, GA \\
 \bottomrule
+\multicolumn{6}{p{0.94\columnwidth}}{\footnotesize States of each
+storm's FEMA declaration; 24 rows (0.4\%) are ZIPs in a neighboring
+state.}\\
 \end{tabular}
 \end{table}
 
 The resulting analytic base table contains \textbf{5,522 ZIP $\times$
-hurricane observations}. The TEST set contains 2,587 observations
-across the five held-out storms.
+hurricane observations}.
 
 \textbf{Target Variable:}
 The primary classification target, \texttt{damage\_severity\_class},
@@ -396,23 +363,28 @@ is derived from $\texttt{verified\_damage\_per\_1000} = \texttt{total\_inspected
 ordered classes: \textit{Low} ($<2$), \textit{Medium}
 ($2 \leq x < 8$), \textit{High} ($8 \leq x < 25$), and
 \textit{Severe} ($\geq 25$) inspected households per 1,000
-residents. A quantile-based fallback is applied when a single
-class exceeds 80\% of observations to prevent degenerate splits.
+residents. \textit{Severe} (at least one inspected household per
+40 residents) marks widespread damage, whereas \textit{High} (one
+per 40--125) marks substantial but less widespread damage. We model severity as ordered \textit{classes} rather
+than a continuous rate because relief triage is a tiered
+decision, the rate is extremely right-skewed, and FEMA counts
+are noisy at the low end; Section~\ref{sec:clf_results} compares
+this choice with ordinal and regression formulations.
 
 \subsection{Feature Engineering}
 
-Twenty-two continuous features, two binary features, and two
+Twenty-two continuous features, one binary feature, and two
 categorical features are used in the model (Table~\ref{tab:features}).
 All demographic percentage shares (e.g., \texttt{pct\_poverty},
-\texttt{pct\_renters}) are derived from raw ACS counts, using
-total households as the denominator for housing-unit ratios
-and total population for per-capita ratios.
-
-Missing values are imputed per data source: CDC SVI
-missing-data sentinel ($-999$) is replaced by state-level
-median imputation; food-access columns are zero-filled with a
-\texttt{food\_data\_missing} binary flag; flood and NRI columns
-are zero-filled (no record implies no mapped hazard).
+\texttt{pct\_renters}) are derived from raw ACS counts and use
+total population as the denominator (e.g., renter-occupied units
+per resident).
+CDC SVI missing-data sentinels ($-999$) are replaced by
+state-level medians; flood and NRI columns are zero-filled (no
+record implies no mapped hazard). \texttt{snap\_participation\_pct},
+the tract-weighted \texttt{TractSNAP} count, is missing for 7\%
+of rows and is median-imputed inside the model pipeline using
+training-fold statistics only.
 
 \begin{table}[htbp]
 \caption{Feature Groups Used in Modeling}
@@ -440,8 +412,6 @@ nri\_cflood\_score, nri\_hrcn\_score \\
 Storm (2) & max\_wind\_speed\_kt, distance\_to\_track\_km \\
 \midrule
 Categorical (2) & hurricane\_category, state \\
-\midrule
-Binary Flag (1) & food\_data\_missing \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -450,31 +420,24 @@ Binary Flag (1) & food\_data\_missing \\
 
 All models share a common \texttt{ColumnTransformer} preprocessor
 implemented in scikit-learn~\cite{pedregosa_sklearn}:
-continuous features scaled with \texttt{RobustScaler} (robust to
-outliers in damage distributions), categorical features encoded
-with \texttt{OneHotEncoder} (drop-first), and binary features
-passed through. The training pipeline uses
-\texttt{imblearn.Pipeline} with SMOTE oversampling
-\cite{chawla_smote} applied only within each cross-validation
-fold's training partition---never to held-out data---preventing
-leakage of synthetic samples into evaluation.
+continuous features are median-imputed and scaled with
+\texttt{RobustScaler}, categorical features are one-hot encoded
+(drop-first), and the binary flag is passed through. The
+\texttt{imblearn.Pipeline} applies SMOTE oversampling
+\cite{chawla_smote} only to training data, never to held-out data.
 
-Five classifiers are evaluated: XGBoost \cite{chen_xgboost}
-(\texttt{multi:softprob}, $n=200$ trees, depth 6, $\eta=0.1$),
-Random Forest (\texttt{class\_weight=balanced}, 200 trees),
-LinearSVC with Platt calibration (wrapped in
-\texttt{CalibratedClassifierCV} for \texttt{predict\_proba}),
-Logistic Regression (SAGA solver, L2 regularization), and
-Gaussian Naive Bayes. RF hyperparameters are tuned with
-GridSearchCV; XGBoost with Optuna ($n=50$ trials,
-TPE sampler) \cite{optuna}.
-
-\textbf{Cross-Validation:} \texttt{StratifiedGroupKFold} with
-\texttt{groups=disaster\_number} is used throughout, ensuring
-no hurricane's ZIP codes appear in both a fold's train and
-validation partitions---the critical design choice for
-avoiding storm-level data leakage. The number of folds is
-capped at the number of distinct disaster numbers.
+Five classifiers are evaluated with fixed hyperparameters:
+XGBoost \cite{chen_xgboost} (\texttt{multi:softprob}, 200 trees,
+depth 6, $\eta=0.1$, subsample 0.8), Random Forest
+(\texttt{class\_weight=balanced}, 200 trees), LinearSVC with Platt
+calibration, Logistic Regression (SAGA, L2), and Gaussian Naive
+Bayes. \textbf{Model selection} uses leave-one-storm-out
+evaluation over the nine TRAIN+VAL storms, so the TEST storms
+play no role in choosing the model. \textbf{Calibration:} the
+selected classifier's probabilities are recalibrated with
+isotonic regression fit on VAL; calibrated probabilities feed
+the FRPI, while class predictions use the uncalibrated
+\textit{argmax}.
 
 \subsection{Food Relief Priority Index}
 
@@ -485,98 +448,72 @@ weighted score:
                0.4 \cdot \text{FFS}
 \label{eq:frpi}
 \end{equation}
-where $P(\text{High} \cup \text{Severe})$ is the summed
-predicted probability for the two highest damage classes from
-the classifier, and FFS (Food Fragility Score) is a
-composite:
+where $P(\text{High} \cup \text{Severe})$ is the summed calibrated
+probability of the two highest damage classes, and the Food
+Fragility Score (FFS) averages the available components
+$c \in \mathcal{C}$:
 \begin{equation}
-\text{FFS} = \text{nanmean}\!\left(
-  \hat{d},\ 1 - \hat{s}_\text{count},\
-  1 - \hat{s}_\text{per1k},\
-  \hat{p}_\text{snap},\ \hat{v}_\text{svi},\
-  f_\text{desert}
-\right)
+\text{FFS} = \frac{1}{|\mathcal{C}|}\sum_{c \in \mathcal{C}} c
 \label{eq:ffs}
 \end{equation}
+with $\mathcal{C} \subseteq \{\hat{d},\, 1-\hat{s}_\text{count},\,
+1-\hat{s}_\text{per1k},\, \hat{p}_\text{snap},\,
+\hat{v}_\text{svi},\, f_\text{desert}\}$,
 where $\hat{(\cdot)}$ denotes MinMax-scaled values in $[0,1]$,
-$\hat{d}$ is scaled distance to nearest supermarket,
-$\hat{s}_\text{count}$ and $\hat{s}_\text{per1k}$ are scaled
-SNAP retailer density (inverted: higher density $\rightarrow$
-lower fragility), $\hat{p}_\text{snap}$ is scaled SNAP
-participation rate, $\hat{v}_\text{svi}$ is scaled SVI overall,
-and $f_\text{desert}$ is the binary food desert flag.
-The nanmean operator computes the arithmetic mean over
-non-missing components only; when \texttt{food\_data\_missing}
-$=1$, the food-access components ($\hat{d}, \hat{s}_\text{count},
-\hat{s}_\text{per1k}, \hat{p}_\text{snap}, f_\text{desert}$) are
-excluded from the mean and \texttt{food\_data\_missing} is set
-to 0 in the FFS, so the score degrades gracefully to an SVI-only
-fragility estimate rather than failing entirely.
-All MinMax scalers are fit on TRAIN ZIPs only and applied
-to VAL and TEST without re-fitting, preventing fragility score
-leakage.
+$\hat{d}$ is distance to the nearest supermarket,
+$\hat{s}_\text{count}$ and $\hat{s}_\text{per1k}$ are SNAP retailer
+count and density (inverted), $\hat{p}_\text{snap}$ is
+SNAP-recipient housing units, $\hat{v}_\text{svi}$ is SVI overall,
+and $f_\text{desert}$ is the food desert flag. A component missing
+for a ZIP is dropped from $\mathcal{C}$ rather than imputed. All
+scalers are fit on TRAIN ZIPs only. Both FRPI terms lie in
+$[0,1]$. The 0.6/0.4 weights favor the acute, storm-driven
+signal over the chronic fragility baseline; they were set before
+the TEST storms were evaluated and were not tuned on them.
 
-The FRPI weights (0.6/0.4) were fixed using TRAIN+VAL data and
-applied unchanged to the TEST set; top-50 food-desert coverage
-is therefore a held-out validation metric, not an in-sample
-optimized quantity. The FRPI is normalized within each hurricane
-to $[0,1]$ for cross-storm comparability.
-
-The 0.6/0.4 weighting reflects a deliberate design choice to
-prioritize storm-driven damage risk---the acute, event-specific
-signal---over the chronic food fragility baseline, while still
-ensuring that community vulnerability contributes meaningfully
-to the final ranking. Weights were validated by confirming that
-the top-50 FRPI ZIPs outperform purely damage-ranked ZIPs on
-food-desert co-occurrence.
-
-To demonstrate robustness of this design,
-Table~\ref{tab:frpi_sens} reports a sensitivity analysis across
-three alternative weight configurations on the TEST set. Any
-ML/FFS blend between 0.5 and 0.7 produces identical 100\%
-food-desert coverage and 75th--76th percentile SVI ranking in the
-top-50 priority ZIP codes, confirming that results are stable
-across a wide range of reasonable weightings. Crucially, removing
-the food fragility component entirely (1.0/0.0) collapses
-food-desert coverage from 100\% to 14\% and drops the mean SVI
-percentile from the 76th to the 58th, demonstrating that the FFS
-component is essential for capturing food-vulnerable communities
-that a pure damage-risk model would miss entirely.
+Because the FFS reuses vulnerability indicators, high-FRPI ZIPs
+are partly food deserts \textit{by construction}; the
+food-desert share of top-ranked ZIPs is therefore a description
+of the index, not evidence of its validity. Table~\ref{tab:frpi_sens}
+shows how the weight trades damage capture for fragility
+coverage, and Section~\ref{sec:frpi_val} validates the index
+against outcomes it does not contain. With uncalibrated
+probabilities, $P(\text{High}\cup\text{Severe})$ saturates near 1
+for many ZIPs and the FFS alone decides the top ranks (100\%
+food deserts at 0.6/0.4); calibration removes this artifact.
 
 \begin{table}[htbp]
-\caption{FRPI Weight Sensitivity (TEST Set, Top-50 ZIPs).
-$^\dagger$Ratio inflated: bottom-50 have near-zero damage
-($\approx$0.03/1k), collapsing food-desert coverage to 14\%.}
+\caption{FRPI Weight Sensitivity (TEST Set, Top-50 ZIPs,
+Calibrated Probabilities)}
 \label{tab:frpi_sens}
 \centering
 \small
-\begin{tabular}{lccc}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lcccc}
 \toprule
-\textbf{ML / FFS} & \textbf{Food Desert} & \textbf{SVI Pctile} &
-\textbf{Dmg Ratio} \\
+\textbf{ML / FFS} & \textbf{Food} & \textbf{SVI} &
+\textbf{True High} & \textbf{Damage} \\
+ & \textbf{Desert} & \textbf{Pctile} & \textbf{/Severe} &
+\textbf{per 1k} \\
 \midrule
-0.5 / 0.5            & 100\% & 76th & 46$\times$ \\
-\textbf{0.6 / 0.4 (chosen)} & \textbf{100\%} & \textbf{76th} & \textbf{43$\times$} \\
-0.7 / 0.3            & 100\% & 75th & 45$\times$ \\
-1.0 / 0.0 (dmg only) & 14\%  & 58th & ---$^\dagger$ \\
+1.0 / 0.0 (risk only)  & 14\%  & 62nd & 86\% & 93.8 \\
+0.7 / 0.3              & 30\%  & 69th & 94\% & 100.9 \\
+\textbf{0.6 / 0.4 (chosen)} & \textbf{52\%} & \textbf{75th} & \textbf{94\%} & \textbf{73.0} \\
+0.5 / 0.5              & 80\%  & 76th & 92\% & 71.2 \\
+0.0 / 1.0 (FFS only)   & 100\% & 81st & 58\% & 31.0 \\
 \bottomrule
-\multicolumn{4}{l}{\small 0.5--0.7 blends all yield 100\% food-desert coverage.}\\
+\multicolumn{5}{l}{\footnotesize TEST base rate of High/Severe: 48\%; mean damage 34.5 per 1k.}\\
 \end{tabular}
 \end{table}
 
 \textbf{Damage Class Binning Sensitivity:}
 Table~\ref{tab:bin_sens} reports XGBoost TEST performance under
-three alternative binning schemes. The original domain-informed
-thresholds (2/8/25 per 1,000) maximize Severe-class recall ---
-the operationally critical metric --- while remaining competitive
-on ROC-AUC. Bin Set B (1/6/20) achieves marginally higher Severe
-recall (0.835) but at the cost of calling more moderate-damage
-ZIPs ``Severe.'' The quantile-based scheme (Bin Set C) improves
-overall discrimination (ROC-AUC 0.792) but collapses Severe
-recall to 0.644 because the quantile threshold ($\approx$64 per
-1,000) is too restrictive for humanitarian use. These results
-confirm that the 25 per 1,000 threshold is robust and
-domain-justified.
+alternative thresholds. Bin Set B (1/6/20) gives slightly higher
+Severe recall (0.825) by labelling more moderate-damage ZIPs
+Severe, while TRAIN-quartile bins (Set C) raise macro ROC-AUC
+(0.794) but lower Severe recall to 0.632 because the Severe
+threshold rises to 64 per 1,000. Conclusions are stable across
+schemes; we retain the domain thresholds (2/8/25).
 
 \begin{table}[htbp]
 \caption{Damage Class Binning Sensitivity (XGBoost, TEST Set)}
@@ -586,15 +523,14 @@ domain-justified.
 \setlength{\tabcolsep}{4pt}
 \begin{tabular}{lccc}
 \toprule
-\textbf{Bin Set (Low/Med/High/Sev)} & \textbf{ROC-AUC} &
+\textbf{Bin Set (Low/Med/High/Sev)} & \textbf{AUC} &
 \textbf{Recall\textsubscript{Sev.}} & \textbf{F1\textsubscript{wtd}} \\
 \midrule
-\textbf{Original ($<$2 / 2--8 / 8--25 / $\geq$25)} & \textbf{0.784} & \textbf{0.801} & \textbf{0.516} \\
-A ($<$3 / 3--10 / 10--30 / $\geq$30)      & 0.774 & 0.751 & 0.543 \\
-B ($<$1 / 1--6 / 6--20 / $\geq$20)        & 0.786 & 0.835 & 0.526 \\
-C (quantile-based)                        & 0.793 & 0.644 & 0.562 \\
+\textbf{Original ($<$2 / 2--8 / 8--25 / $\geq$25)} & \textbf{0.784} & \textbf{0.797} & \textbf{0.537} \\
+A ($<$3 / 3--10 / 10--30 / $\geq$30)      & 0.776 & 0.762 & 0.550 \\
+B ($<$1 / 1--6 / 6--20 / $\geq$20)        & 0.788 & 0.825 & 0.526 \\
+C (TRAIN quartiles: 2.2 / 27 / 64)        & 0.794 & 0.632 & 0.568 \\
 \bottomrule
-\multicolumn{4}{l}{\small Original maximizes Severe recall --- the operationally critical metric.}\\
 \end{tabular}
 \end{table}
 
@@ -602,58 +538,73 @@ C (quantile-based)                        & 0.793 & 0.644 & 0.562 \\
 \section{Results and Evaluation}
 \label{sec:results}
 
+Two limitations frame all results below. First, the storm
+features are exact in our evaluation but must be forecast in
+practice (Section~\ref{sec:robust}). Second, the exploratory
+regression model fails on two TEST storms ($R^2<0$ for Ida and
+Helene; Section~\ref{sec:regression}), so we use the ordered
+classifier, not a continuous damage estimate, for ranking.
+
 \subsection{Classification Performance on Held-Out Test Set}
 \label{sec:clf_results}
 
-Five classifiers were evaluated on the held-out TEST set
-(5 hurricanes, 2,587 ZIP $\times$ hurricane rows). The TRAIN set
-contains 1,847 rows across 5 storms --- an unusual inversion where
-TEST exceeds TRAIN in size, reflecting the larger geographic
-footprint of the 2021--2024 storms (Ida, Ian, Idalia, Helene,
-Milton) relative to the 2016--2018 training storms. The TRAIN
-class distribution is severely imbalanced: Severe 51.9\% (1,205
-rows), Low 24.8\% (575), High 15.8\% (366), and Medium 7.6\%
-(177) --- this imbalance directly explains Medium's poor F1 (0.21)
-even after SMOTE oversampling, as Medium is the most
-underrepresented class at training time.
-XGBoost achieves the highest macro ROC-AUC (0.78) and is
-selected as the deployment model. Random Forest achieves
-the highest raw Severe-class recall (0.83) but at lower
-ROC-AUC (0.76); XGBoost is preferred because it produces
-calibrated class probabilities required by the Food Relief
-Priority Index (Eq.~\ref{eq:frpi}).
-Table~\ref{tab:clf_results} reports summary metrics for all
-five models; Table~\ref{tab:perclass} reports per-class
-precision, recall, and F1 for the best model derived directly
-from the confusion matrix (Fig.~\ref{fig:confusion}).
+Table~\ref{tab:clf_results} reports all five classifiers on the
+TEST set (2,587 rows). TRAIN (2,323 rows) is smaller than TEST
+because the 2021--2024 storms affected more ZIP codes; its class
+distribution is Severe 51.9\% (1,205), Low 24.8\% (575), High
+15.8\% (366), and Medium 7.6\% (177).
+\textbf{Selection.} XGBoost has the highest leave-one-storm-out
+macro ROC-AUC on the nine development storms (0.699 vs.\ 0.689 for
+Random Forest) and is selected; it also has the highest TEST
+ROC-AUC (0.784). Random Forest has higher TEST Severe recall
+(0.825 vs.\ 0.797) and better-calibrated raw probabilities
+(log-loss 1.07 vs.\ 1.42). After isotonic calibration on VAL,
+XGBoost's Severe-class expected calibration error falls from
+0.151 to 0.045 (Fig.~\ref{fig:calib}), its multiclass Brier score from 0.164 to 0.141
+(uniform guessing: 0.188; TRAIN class priors: 0.204), and its
+High$\cup$Severe ROC-AUC rises to 0.880. On this probability, which
+the FRPI uses, the two models are within 0.01 of each other on both
+the development storms (RF 0.844, XGBoost 0.832) and TEST
+(calibrated: XGBoost 0.880, RF 0.876); we deploy calibrated XGBoost because it was
+selected by the pre-specified criterion, and either model would
+yield similar rankings.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.72\columnwidth]{calibration_severe.png}
+\caption{Severe-class reliability on the TEST set. Raw XGBoost
+probabilities are over-confident above $\approx$0.3 (ECE 0.151);
+isotonic calibration fit on VAL brings them close to the diagonal
+(ECE 0.045). Random Forest (raw) is shown for comparison; bins
+with fewer than 10 rows are omitted.}
+\label{fig:calib}
+\end{figure}
 
 \begin{table}[htbp]
-\caption{Model Comparison on TEST Set (5 Held-Out Hurricanes, 2,587 Rows)}
+\caption{Model Comparison on TEST Set (5 Held-Out Hurricanes,
+2,587 Rows). Dev = Leave-One-Storm-Out ROC-AUC on the 9
+TRAIN+VAL Storms, Used for Selection.}
 \label{tab:clf_results}
 \centering
 \small
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{lcccc}
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lccccc}
 \toprule
-\textbf{Model} & \textbf{Acc.} & \textbf{F1\textsubscript{wtd}} &
-\textbf{ROC-AUC} & \textbf{Recall\textsubscript{Sev.}} \\
+\textbf{Model} & \textbf{Dev} & \textbf{Acc.} & \textbf{F1\textsubscript{wtd}} &
+\textbf{AUC} & \textbf{Rec\textsubscript{Sev.}} \\
 \midrule
-\textbf{XGBoost}   & \textbf{0.559} & \textbf{0.516} & \textbf{0.784} & \textbf{0.801} \\
-Random Forest      & 0.572 & 0.524 & 0.764 & 0.832 \\
-LinearSVC (cal.)   & 0.521 & 0.482 & 0.757 & 0.613 \\
-Logistic Reg.      & 0.488 & 0.457 & 0.703 & 0.558 \\
-Gaussian NB        & 0.398 & 0.396 & 0.662 & 0.383 \\
+\textbf{XGBoost}   & \textbf{0.699} & \textbf{0.573} & \textbf{0.537} & \textbf{0.784} & \textbf{0.797} \\
+Random Forest      & 0.689 & 0.572 & 0.526 & 0.768 & 0.825 \\
+LinearSVC (cal.)   & 0.673 & 0.528 & 0.482 & 0.754 & 0.590 \\
+Logistic Reg.      & 0.622 & 0.488 & 0.457 & 0.702 & 0.560 \\
+Gaussian NB        & 0.603 & 0.403 & 0.401 & 0.661 & 0.384 \\
 \midrule
-Dummy (stratified)           & 0.276 & 0.248 & 0.500 & 0.555 \\
-Dummy (most frequent)$^\dagger$ & 0.276 & 0.119 & 0.500 & 1.000 \\
+Dummy (stratified)           & --- & 0.276 & 0.248 & 0.500 & 0.555 \\
+Dummy (most freq.)$^\dagger$ & --- & 0.276 & 0.119 & 0.500 & 1.000 \\
 \bottomrule
-\multicolumn{5}{p{0.92\columnwidth}}{\footnotesize $^\dagger$TRAIN
-class distribution: Severe 51.9\%, Low 24.8\%, High 15.8\%, Medium
-7.6\%. Severe is the modal class, so most-frequent dummy predicts
-Severe for all rows --- trivially capturing all 713 Severe TEST rows
-(recall 1.0) but misclassifying all other 1,874. SMOTE is applied to
-address this imbalance during training.}\\
-\multicolumn{5}{l}{\footnotesize Bold = selected deployment model (highest ROC-AUC).}\\
+\multicolumn{6}{p{0.94\columnwidth}}{\footnotesize $^\dagger$Severe
+is the modal TRAIN class, so this baseline labels every row
+Severe.}\\
 \end{tabular}
 \end{table}
 
@@ -666,100 +617,166 @@ address this imbalance during training.}\\
 \toprule
 \textbf{Class} & \textbf{Precision} & \textbf{Recall} & \textbf{F1} & \textbf{Support} \\
 \midrule
-High    & 0.32 & 0.21 & 0.25 & 541  \\
-Low     & 0.76 & 0.82 & 0.79 & 862  \\
-Medium  & 0.43 & 0.14 & 0.21 & 471  \\
-Severe  & 0.50 & 0.82 & 0.62 & 713  \\
+High    & 0.30 & 0.20 & 0.24 & 541  \\
+Low     & 0.77 & 0.84 & 0.80 & 862  \\
+Medium  & 0.43 & 0.18 & 0.25 & 471  \\
+Severe  & 0.52 & 0.80 & 0.63 & 713  \\
 \midrule
-Weighted avg & 0.55 & 0.56 & 0.53 & 2587 \\
-Macro avg    & 0.50 & 0.50 & 0.47 & 2587 \\
+Weighted avg & 0.54 & 0.57 & 0.54 & 2587 \\
+Macro avg    & 0.50 & 0.50 & 0.48 & 2587 \\
 \bottomrule
-\multicolumn{5}{l}{\footnotesize Weighted avg uses support-weighted class scores.}\\
 \end{tabular}
 \end{table}
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.95\columnwidth]{outputs/test_confusion.png}
+\includegraphics[width=0.78\columnwidth]{test_confusion.png}
 \caption{Confusion matrix on the TEST set (2,587 ZIP $\times$ hurricane
-rows, 5 held-out storms). Rows = true class; columns = predicted class.
-The Severe class achieves recall 0.82; the Medium class is the hardest
-to distinguish, reflecting its boundary position between Low and High.}
+rows, 5 held-out storms). Most errors fall between adjacent
+classes; the largest off-diagonal cell is true High predicted
+Severe (323 rows).}
 \label{fig:confusion}
 \end{figure}
 
-The disparity between classes is expected given the training
-distribution: Low-class ZIP codes are the most frequent, making
-Low recall (0.82) and F1 (0.79) the highest among all classes.
-The Medium class achieves the lowest F1 (0.21), reflecting an
-intrinsic difficulty: Medium-severity ZIP codes occupy a
-transitional damage regime whose features overlap substantially
-with both Low and High classes. ZIP codes in this range often
-share demographic and storm-exposure characteristics with
-adjacent classes, making clean separation impossible without
-post-event inspection data. We explored ordinal and hierarchical
-classification approaches but found no improvement over the
-standard softmax formulation; the Medium class boundary is
-fundamentally a data-generation challenge rather than a modeling
-one, and its operational impact is limited since the FRPI
-prioritization index is driven by the High+Severe probability
-mass (Eq.~\ref{eq:frpi}), not the Medium class directly.
-Quantitatively, 39.3\% of Medium-class ZIP-hurricane rows (185
-of 471) achieve an FRPI $\geq 0.70$ and would still be flagged
-for food relief despite intermediate physical damage; the
-majority (58.6\%) clear the lower $\geq 0.50$ threshold, driven
-by the food-fragility component --- a ZIP with moderate physical
-damage but high SVI and no nearby supermarket still ranks as
-high-priority, which is precisely the intended behavior of the
-index. Of all TEST ZIPs that received any FEMA inspection, 22.1\%
-are true Medium class, confirming that this group is
-operationally significant and substantially captured by the FRPI.
-Critically, Severe-class recall of 0.82 is the operationally
-important metric: the model identifies 4-in-5 severely damaged
-ZIP codes before inspection data is available, at the cost of
-some over-prediction (Severe precision: 0.50). The macro ROC-AUC
-of 0.78 confirms strong discriminative ability even across this
-imbalanced four-class setting. XGBoost's ROC-AUC of 0.784
-represents a clean 28-point lift over the stratified dummy
-baseline (0.500), confirming the model learns a genuine signal
-rather than exploiting class imbalance. A Brier score analysis
-further validates probabilistic skill: the overall multiclass
-Brier score of 0.166 is well below the random baseline of
-$\approx$0.25, with per-class scores of Low: 0.109, Medium:
-0.158, High: 0.197, and Severe: 0.200. The Severe class
-reliability diagram reveals systematic over-confidence at
-mid-to-high probabilities (the calibration curve falls below the
-diagonal from $\approx$0.4 onwards), meaning
-$P(\text{High} \cup \text{Severe})$ in the FRPI is slightly
-inflated in the moderate-risk range. This makes the priority
-index conservatively aggressive --- it over-prioritizes ZIPs at
-moderate predicted risk --- which is the preferred failure mode
-for a humanitarian triage system. Platt scaling or isotonic
-regression on the Severe class would correct this if operational
-precision becomes critical.
+\textbf{Where the errors are.} Table~\ref{tab:perclass} and
+Fig.~\ref{fig:confusion} show that overall accuracy (57\%) is
+held down by the two middle classes. The largest error is
+\textit{High predicted as Severe}: 323 of 541 High rows (60\%).
+Severe precision is therefore 0.52, but 82\% of Severe
+predictions are truly High \textit{or} Severe, and only 5\% are
+truly Low. For allocation this boundary matters less than it
+appears: the FRPI uses $P(\text{High}\cup\text{Severe})$, so
+confusing the two upper classes barely changes a ZIP's rank
+(Section~\ref{sec:frpi_val}). It does mean the model cannot
+reliably separate ``substantial'' from ``extreme'' damage, so
+quantities shipped to a ZIP should not be scaled by the predicted
+class alone. Medium (F1 0.25) is the hardest class: it is the
+rarest in TRAIN (7.6\%) and occupies a transitional damage regime.
 
-\subsection{Ablation: Unsupervised Cluster Feature}
+\textbf{Why ordered classes.} We compared three formulations on
+TEST: the multiclass model, an ordinal model (three cumulative
+binary XGBoost models, $P(y>k)$~\cite{frank_hall_ordinal}), and an
+XGBoost regressor on $\log(1+\text{rate})$ binned with the same
+thresholds (the latter two without SMOTE). Their rank correlation with verified damage is
+similar ($\rho$ = 0.74, 0.73, 0.71), as is High$\cup$Severe
+ROC-AUC (0.87, 0.88, 0.89), but the regressor recovers far fewer
+Severe ZIPs (recall 0.66 vs.\ 0.80 multiclass and 0.82 ordinal),
+because squared-error fitting shrinks predictions away from the
+heavy upper tail. The ordinal model is a viable alternative; we
+keep the multiclass model for its higher macro ROC-AUC (0.784
+vs.\ 0.763).
 
-K-Means clustering ($k=5$, fit on TRAIN) produces a
-\texttt{cluster\_label} feature. Evaluation with and without
-this feature across all five classifiers reveals a $\leq 0.013$
-weighted-F1 difference, with XGBoost performing marginally
-\textit{better} without it. The SVI and demographic features
-already encode the vulnerability profile that K-Means recovers;
-the cluster feature is redundant and excluded from the final
-pipeline.
+\subsection{Robustness Across Storms, ZIP Codes, Features, and
+Forecast Error}
+\label{sec:robust}
+
+Because the data contain only 14 independent storms,
+Table~\ref{tab:robust} reports a set of robustness checks.
+
+\begin{table}[htbp]
+\caption{Robustness Checks (XGBoost; TEST Unless Noted)}
+\label{tab:robust}
+\centering
+\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Setting} & \textbf{Macro AUC} & \textbf{Recall\textsubscript{Sev.}} \\
+\midrule
+Fixed split (5 TEST storms)                & 0.784 & 0.797 \\
+\quad storm-bootstrap 95\% CI              & [0.71, 0.83] & [0.71, 0.87] \\
+Leave-one-hurricane-out (14 storms)        & 0.76$\pm$0.08 & 0.64$\pm$0.23 \\
+Expanding window (11 storms)               & 0.73$\pm$0.11 & 0.72$\pm$0.21 \\
+\midrule
+ZIP-disjoint training (1,172 rows)         & 0.778 & 0.856 \\
+\quad same-size random subsample           & 0.779 & 0.801 \\
+\midrule
+Top-10 SHAP features (from VAL)            & 0.778 & 0.780 \\
+Storm features only (3)                    & 0.705 & 0.606 \\
+All except food-access features (20)       & 0.784 & 0.798 \\
+No storm features (22)                     & 0.556 & 0.676 \\
+\midrule
+Forecast-quality storm inputs, 24\,h       & 0.73$\pm$0.04 & 0.69$\pm$0.06 \\
+\quad 48\,h                                & 0.64$\pm$0.05 & 0.51$\pm$0.13 \\
+\quad 72\,h                                & 0.64$\pm$0.06 & 0.41$\pm$0.15 \\
+\midrule
+Static 2021 ACS (rebuilt)                  & 0.781 & 0.781 \\
+Year-matched ACS (2016--2024)              & 0.783 & 0.729 \\
+\bottomrule
+\multicolumn{3}{p{0.94\columnwidth}}{\footnotesize $\pm$: standard
+deviation across storms (LOHO, expanding) or across 20 forecast-error
+draws.}\\
+\end{tabular}
+\end{table}
+
+\textbf{Storm-level uncertainty.} With only 14 independent
+events, the single TEST split is optimistic: leave-one-hurricane-out
+macro ROC-AUC averages $0.76\pm0.08$, and Severe recall varies
+from 0.43 (Idalia) to 0.82 (Ida) among the TEST storms. Training
+only on storms that occurred earlier gives similar results
+($0.73\pm0.11$). Helene, whose Georgia ZIPs were severely damaged
+far inland, is the hardest TEST storm under both schemes (ROC-AUC
+0.63).
+
+\textbf{ZIP overlap.} Because storms rather than ZIP codes are
+held out, 2,059 of 2,587 TEST rows (80\%) are ZIPs that also
+appear in TRAIN or VAL. Retraining after removing every TEST ZIP
+from TRAIN gives the same macro ROC-AUC as a same-size random
+subsample (0.778 vs.\ 0.779), and repeating each ZIP's most
+recent observed class scores only 22\% accuracy, so the model is
+not memorizing locations.
+
+\textbf{Feature subsets.} Ten features (selected by SHAP on VAL)
+recover most of the full model's performance (0.778 vs.\ 0.784).
+Storm geometry alone reaches 0.705; static vulnerability and
+hazard features add 0.08, and food-access features add nothing to
+damage \textit{classification}---they matter only through the FFS.
+
+\textbf{Data vintage.} Replacing the static 2021 ACS demographics
+with each storm's own 5-year vintage (2016--2024; 99\% of rows
+matched) leaves macro ROC-AUC unchanged (0.783 vs.\ 0.781 for the
+same features rebuilt from the 2021 vintage) and High$\cup$Severe
+ROC-AUC at 0.872 vs.\ 0.870. Severe recall falls from 0.78 to 0.73
+while precision rises from 0.50 to 0.52, so the vintage mainly
+shifts the Severe decision boundary rather than the model's
+ranking. SVI (biennial, tract-level) and the 2019 Food Access
+Research Atlas were not re-matched.
+
+\textbf{Forecast error.} To mimic pre-landfall use, we displace
+each TEST storm's entire track perpendicular to its heading by a
+random offset whose mean magnitude equals the National Hurricane
+Center's 2019--2023 mean official Atlantic track error (67, 116,
+and 161\,km at 24, 48, and 72\,h~\cite{nhc_verification}), perturb
+peak wind by the corresponding intensity error (7--11\,kt), and
+recompute every ZIP's distance to the track (20 draws per lead
+time). Skill degrades quickly (Fig.~\ref{fig:forecast}): macro ROC-AUC is 0.73 at 24\,h and
+0.64 at 48--72\,h, against 0.56 with no storm information at all,
+and only 58\% / 40\% of each storm's FRPI top decile is retained
+at 24 / 48\,h. Training on similarly perturbed tracks stabilizes
+the ranking (81\% retained at 48\,h) but caps ROC-AUC near 0.64
+even with a perfect track. The framework is therefore most useful
+inside roughly 24\,h of landfall, and rankings issued earlier
+should be treated as provisional and refreshed with each NHC
+advisory.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.85\columnwidth]{forecast_lead_time.png}
+\caption{TEST skill when the storm features are replaced by
+forecast-quality values (NHC 2019--2023 mean track and intensity
+errors; mean $\pm$ s.d.\ over 20 draws; 2,560 TEST rows with ZIP
+centroids). The dashed line is a model with no storm features.}
+\label{fig:forecast}
+\end{figure}
 
 \subsection{Regression Results (Exploratory)}
+\label{sec:regression}
 
-To complement the categorical classifier with a continuous damage
-estimate---useful for characterizing prediction limitations and
-informing future work---a separate Random Forest regressor
-(log1p-transformed target, 400 trees) predicts the continuous
-\texttt{verified\_damage\_per\_1000} metric. This analysis is
-exploratory and does not feed into the FRPI pipeline; the FRPI
-relies exclusively on the classifier's calibrated class
-probabilities (Eq.~\ref{eq:frpi}). Table~\ref{tab:reg_results}
-reports per-hurricane RMSE, MAE, and $R^2$ on the TEST set.
+A Random Forest regressor on the log-transformed target
+(\texttt{log1p}, 400 trees) predicts
+\texttt{verified\_damage\_per\_1000} directly; it does not feed
+the FRPI. Table~\ref{tab:reg_results} reports per-hurricane
+results on TEST.
 
 \begin{table}[htbp]
 \caption{Regression Results per TEST Hurricane (RF, log1p target)}
@@ -770,288 +787,230 @@ reports per-hurricane RMSE, MAE, and $R^2$ on the TEST set.
 \toprule
 \textbf{Hurricane} & \textbf{RMSE} & \textbf{MAE} & \textbf{$R^2$} \\
 \midrule
-Milton  (2024) & 19.4  & 9.4  & \phantom{-}0.35 \\
-Ian     (2022) & 48.5  & 20.9 & \phantom{-}0.19 \\
-Idalia  (2023) & 172.5 & 24.7 & \phantom{-}0.06 \\
-Helene  (2024) & 48.4  & 30.7 &             $-$0.10 \\
-Ida     (2021) & 162.5 & 92.9 &             $-$0.18 \\
+Milton  (2024) & 19.3  & 9.2  & \phantom{-}0.35 \\
+Ian     (2022) & 48.9  & 20.6 & \phantom{-}0.17 \\
+Idalia  (2023) & 172.0 & 24.5 & \phantom{-}0.06 \\
+Helene  (2024) & 48.1  & 30.3 &             $-$0.09 \\
+Ida     (2021) & 162.2 & 92.8 &             $-$0.17 \\
 \midrule
-\multicolumn{2}{l}{Aggregate (log1p)} & RMSE: 111 & MAE: 31 \\
+\multicolumn{2}{l}{All TEST rows} & RMSE: 87.6 & MAE: 27.8 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The log1p transformation of the right-tailed damage distribution
-reduces aggregate RMSE from 136 to 111 and MAE from 38 to 31.
-Per-hurricane variance is high: Milton and Ian, where damage
-was spatially concentrated along well-defined track corridors,
-yield positive $R^2$; Ida and Idalia, with diffuse inland
-flooding patterns, are harder to predict from ZIP-level
-features alone.
+The \texttt{log1p} transform lowers MAE (40.3 to 27.8) relative
+to a raw-target model but not RMSE (82.5 vs.\ 87.6), because it
+under-predicts the most extreme ZIPs. Milton and Ian yield
+positive $R^2$, Idalia is near zero, and Ida and Helene are
+negative. Both failures lie outside the training range: Ida's
+Louisiana ZIPs had the highest damage rates in the data (mean 117
+inspected households per 1,000; 62\% Severe), and Helene's Georgia
+ZIPs were severely damaged far inland (50\% Severe) despite the
+lowest coastal-flood hazard scores of any storm (NRI mean 10 vs.\
+19--74). Track distance and static hazard scores cannot anticipate
+such out-of-range storms, which is the main failure mode of the
+framework.
 
 \subsection{Equity Audit}
 
 Table~\ref{tab:equity} reports Fairlearn~\cite{bird_fairlearn}
-metrics stratified by SVI quartile on the TEST set. The key
-finding is that Severe-class recall is \textit{monotonically
-higher} for more socially vulnerable communities:
-$Q1: 0.65 \rightarrow Q2: 0.83 \rightarrow Q3: 0.86 \rightarrow
-Q4: 0.89$. This is the desirable direction for a humanitarian
-system: the model is \textit{better} at identifying severely
-damaged ZIP codes precisely in the communities least able to
-self-recover.
+metrics by SVI quartile on TEST. Severe-class recall rises
+monotonically with social vulnerability (Q1: 0.63 to Q4: 0.87),
+so the model misses fewer severely damaged ZIP codes in the most
+vulnerable communities.
 
 \begin{table}[htbp]
 \caption{Equity Audit by SVI Quartile (XGBoost, TEST Set)}
 \label{tab:equity}
 \centering
 \small
-\begin{tabular}{lcccc}
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lccccc}
 \toprule
-\textbf{SVI Quartile} & \textbf{Acc.} & \textbf{F1\textsubscript{wtd}} &
-\textbf{Recall\textsubscript{Sev.}} & \textbf{DP Ratio} \\
+\textbf{SVI} & \textbf{Acc.} & \textbf{Rec\textsubscript{Sev.}} &
+\textbf{Prec\textsubscript{Sev.}} & \textbf{True Sev.} &
+\textbf{Pred. Sev.} \\
+\textbf{Quartile} & & & & \textbf{rate} & \textbf{rate} \\
 \midrule
-Q1 (Low SVI)  & 0.559 & 0.558 & 0.655 & 0.525 \\
-Q2            & 0.558 & 0.515 & 0.832 & 0.525 \\
-Q3            & 0.534 & 0.450 & 0.858 & 0.525 \\
-Q4 (High SVI) & \textbf{0.627} & 0.550 & \textbf{0.885} & 0.525 \\
+Q1 (low)  & 0.556 & 0.634 & 0.508 & 0.219 & 0.273 \\
+Q2        & 0.558 & 0.799 & 0.470 & 0.230 & 0.391 \\
+Q3        & 0.536 & 0.833 & 0.509 & 0.316 & 0.517 \\
+Q4 (high) & 0.644 & 0.867 & 0.574 & 0.337 & 0.509 \\
 \midrule
-Overall       & 0.569 & 0.528 & 0.820 & 0.525 \\
+Overall   & 0.573 & 0.797 & 0.520 & 0.276 & 0.423 \\
 \bottomrule
-\multicolumn{5}{l}{\small EO difference: 0.230 (across all quartile pairs).}\\
+\multicolumn{6}{p{0.94\columnwidth}}{\footnotesize DP ratio
+(min/max predicted Severe rate): 0.53; same ratio for true
+Severe rates: 0.65. Equalized-odds difference: 0.23.}\\
 \end{tabular}
 \end{table}
 
-The demographic parity ratio of 0.525 indicates that the model
-predicts Severe damage roughly twice as often in the highest-SVI
-communities as in the lowest. This reflects the real-world
-signal: severe hurricane damage disproportionately affects
-socially vulnerable ZIP codes, and the model has learned
-this pattern rather than suppressing it. We note that a
-demographic parity ratio of 0.525 would be considered a disparity
-in standard fairness literature~\cite{mehrabi_fairness}; however,
-in a humanitarian triage context, suppressing this disparity would
-mean \textit{under-prioritizing} the most vulnerable communities.
-The equity audit confirms that the model's higher prediction rate
-for high-SVI ZIPs reflects a genuine damage signal (Severe recall
-Q4: 0.885 vs Q1: 0.655), not an algorithmic artifact, making this
-disparity operationally desirable rather than harmful.
+These results do not by themselves establish equitable
+allocation. The predicted Severe rate rises faster across
+quartiles than the true rate (demographic parity ratio 0.53 vs.\
+0.65 for the observed labels), so part of the disparity reflects
+the model rather than the outcome: the model over-predicts Severe
+by 0.16--0.20 in Q2--Q4 versus 0.05 in Q1. More fundamentally, the labels
+are FEMA inspection counts, which depend on households applying
+for assistance; if registration is lower in some communities,
+both the labels and this audit inherit that bias. We therefore
+read the audit as evidence that the model does not
+\textit{under}-detect damage in high-SVI ZIP codes relative to
+FEMA's own records, not as proof of fair outcomes.
 
 \subsection{Feature Importance via SHAP}
 
-Fig.~\ref{fig:shap} shows the SHAP beeswarm plot for the Severe
-class across the TEST set, computed using TreeSHAP
-\cite{lundberg_shap}. The top predictors in descending order of
-mean $|\text{SHAP}|$ are: (1)~\texttt{distance\_to\_track\_km},
-(2)~\texttt{nri\_hrcn\_score} (FEMA hurricane hazard risk),
-(3)~hurricane category 4 indicator, (4)~\texttt{svi\_socioeconomic},
-(5)~\texttt{pct\_mobile\_homes},
-(6)~\texttt{nri\_cflood\_score} (coastal flood risk),
-(7)~\texttt{svi\_minority\_lang},
-(8)~\texttt{snap\_retailers\_per\_1k},
-(9)~\texttt{svi\_housing\_transport}, and
-(10)~\texttt{pct\_elderly\_65plus}.
+Fig.~\ref{fig:shap} shows the ten most important features for the
+Severe class (mean $|\text{SHAP}|$, TreeSHAP~\cite{lundberg_shap},
+TEST set): \texttt{distance\_to\_track\_km},
+\texttt{nri\_hrcn\_score}, the category-4 indicator,
+\texttt{svi\_socioeconomic}, \texttt{pct\_mobile\_homes},
+\texttt{max\_wind\_speed\_kt}, \texttt{nri\_cflood\_score},
+\texttt{svi\_minority\_lang}, \texttt{snap\_retailer\_count}, and
+\texttt{snap\_participation\_pct}. Storm geometry dominates, as
+expected; the strong contribution of \texttt{svi\_socioeconomic}
+and \texttt{pct\_mobile\_homes} is consistent with the structural
+vulnerability literature~\cite{cutter_svi}. The negative
+association of \texttt{max\_wind\_speed\_kt} with Severe reflects
+that it is a storm's lifetime peak, often reached far offshore,
+rather than the wind experienced at the ZIP code. The SNAP features
+rank in the top ten but, per the ablation in
+Table~\ref{tab:robust}, removing all food-access features does
+not reduce performance, so their attributions likely reflect
+correlation with population and urbanization rather than an
+independent damage signal.
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.95\columnwidth]{outputs/shap_beeswarm_severe.png}
-\caption{SHAP beeswarm plot for the Severe damage class (XGBoost,
-TEST set). Each point is one ZIP $\times$ hurricane observation.
-Red = high feature value; blue = low feature value.
-Storm proximity (\texttt{distance\_to\_track\_km}) and FEMA NRI
-hurricane hazard score (\texttt{nri\_hrcn\_score}) are the
-dominant predictors; social vulnerability features (SVI themes)
-and food-access density (\texttt{snap\_retailers\_per\_1k})
-contribute substantially.}
+\includegraphics[width=0.95\columnwidth]{shap_beeswarm_severe.png}
+\caption{SHAP beeswarm plot of the ten most important features for
+the Severe class (XGBoost, TEST set). Each point is one ZIP
+$\times$ hurricane row; red = high feature value.}
 \label{fig:shap}
 \end{figure}
 
-The dominance of storm-geometry features (distance, category,
-wind speed) is expected. Of greater humanitarian relevance is
-the strong contribution of \texttt{svi\_socioeconomic} and
-\texttt{pct\_mobile\_homes}: communities with lower incomes and
-higher mobile-home prevalence are more likely to be classified
-Severe at equivalent storm exposure, consistent with the
-literature on structural vulnerability \cite{cutter_svi}.
-The appearance of \texttt{snap\_retailers\_per\_1k} in the top
-10 confirms that food-access geography independently informs
-damage severity prediction beyond purely demographic signals.
-
 \subsection{Priority Index Validation}
+\label{sec:frpi_val}
 
-To validate the FRPI, we compare the top-50 and bottom-50
-priority ZIP codes across the five TEST hurricanes:
-\begin{itemize}
-    \item \textbf{100\%} of top-50 ZIPs are classified as food
-    deserts (vs.\ 0\% of bottom-50).
-    \item Top-50 ZIPs rank in the \textbf{76th percentile}
-    of national social vulnerability.
-    \item Top-50 ZIPs experience \textbf{43$\times$} the actual
-    FEMA-verified damage per 1,000 residents compared to the
-    bottom-50.
-\end{itemize}
+We validate the FRPI against outcomes it does not contain,
+within each TEST storm (averaged over the five storms).
 
-The 43$\times$ damage ratio, measured against ground-truth FEMA
-inspection data withheld from the model, provides strong evidence
-that the FRPI captures operationally meaningful variation in
-both physical damage and food-access vulnerability.
+\textbf{Damage capture and error propagation.} Within each storm,
+91.6\% of the FRPI top decile are ZIP codes FEMA later verified as
+High or Severe (storm base rate 49.8\%), and only 2.4\% are truly
+Low, so the highest-ranked ZIPs are rarely false alarms. Misses are
+the larger risk: only 55\% of truly Severe ZIP codes fall in their
+storm's FRPI top quartile, so a coordinator serving only the top
+quarter would miss nearly half of the most damaged areas. The
+FRPI's rank correlation with verified damage ($\rho=0.68$) is
+essentially that of the damage-risk term alone (0.67), while the
+FFS alone is nearly uncorrelated with damage ($\rho=0.14$); the
+fragility term shifts priority toward food-fragile ZIPs with
+somewhat lower damage (Table~\ref{tab:frpi_sens}) at little cost
+in overall ranking quality.
 
-\subsection{IHP Registration Validation}
+\textbf{Independent food-need check.} FEMA registrations record
+whether the applicant reported a need for food (2.04M such
+registrations across the TEST storms). Food-need registrations per
+1,000 residents rank-correlate with the FRPI at $\rho=0.67$ (top
+decile: 2.9$\times$ the storm mean), slightly above the damage term
+alone (0.66), but this count largely tracks damage ($\rho=0.94$).
+The \textit{share} of registrants reporting food need, averaging
+63\%, behaves differently: it rises with social vulnerability (SVI
+$\rho=0.26$, FFS 0.20, positive in all five storms) and falls with
+predicted damage ($-0.16$); the FRPI sits between ($-0.12$). The FFS
+thus carries food-need information that damage risk lacks, but at
+0.6/0.4 the FRPI ranks where food need is most \textit{abundant},
+not where it is most \textit{prevalent} among affected households;
+a higher fragility weight would shift this balance at some cost in
+damage capture (Table~\ref{tab:frpi_sens}).
 
-FEMA Individual Household Program (IHP) registration counts
-are used as an independent validation signal. A Pearson
-correlation $r > 0.85$ between per-ZIP FEMA inspector-verified
-counts and IHP registration counts confirms that both measures
-proxy the same underlying damage signal, supporting the use of
-FEMA Housing Assistance data as the primary target.
+\textbf{IHP registration check.} FEMA inspector-verified counts
+and IHP valid registration counts are strongly correlated
+(Pearson $r=0.91$ across all rows), so the target is not an
+artifact of inspection scheduling, although both share the
+registration bias discussed above.
 
 % ============================================================
 \section{Discussion}
 \label{sec:discussion}
 
-\subsection{Operational Deployment}
-The FRPI framework is designed to operate in \textit{pre-landfall}
-mode: given storm track forecasts from the National Hurricane
-Center and pre-computed community vulnerability scores, the model
-produces ZIP-code priority rankings within minutes of a storm's
-projected path becoming available. This positions relief
-organizations to act during the critical 24--48 hour window
-before landfall---when pre-positioning of food, water, and
-personnel is still logistically feasible---rather than waiting
-for post-event inspection data that arrives days too late.
-
-\textbf{Coordinator workflow:} An emergency logistics coordinator
-opens the Streamlit dashboard, selects the incoming storm by
-name, and sets a minimum FRPI threshold (e.g., 0.70) to filter
-for high-priority ZIP codes. The dashboard returns a ranked list
-of target ZIP codes with color-coded Folium map overlays,
-enabling rapid identification of food-desert areas at highest
-predicted risk. The coordinator exports the ranked list directly
-to their logistics system for resource dispatch.
-
-\textbf{Prediction update cadence:} Rankings are re-generated
-each time the National Hurricane Center issues an updated track
-forecast, typically every 6 hours during an active storm. As the
-storm track narrows, model confidence increases and the priority
-list converges. Coordinators are advised to lock pre-positioning
-decisions no later than 12 hours before projected landfall, when
-ground logistics are still feasible.
-
-\textbf{Uncertainty interpretation:} The FRPI is a composite
-score, not a probability. Coordinators are trained to interpret
-the score as a \textit{relative priority rank} rather than an
-absolute risk estimate. Per-ZIP SHAP waterfall plots explain
-which features drove each prediction, allowing coordinators to
-apply local knowledge --- for example, deprioritizing a high-FRPI
-ZIP code known to have already received aid from a neighboring
-agency.
-
-\textbf{Human oversight:} The dashboard enforces human-in-the-loop
-decision-making by design: no automated resource dispatch occurs.
-All FRPI outputs are advisory. The system supports, but does not
-replace, the judgment of trained emergency managers with
-on-the-ground situational awareness.
+\subsection{Operational Use}
+The FRPI is intended as a decision-support input for
+pre-positioning food once a storm's track is reasonably certain.
+Our forecast-error analysis (Section~\ref{sec:robust}) indicates
+that this is roughly the final 24\,h before landfall; at 48--72\,h,
+rankings change substantially with each forecast and should be
+treated as provisional. In the dashboard, a coordinator selects a
+storm, sets a priority threshold, and receives a ranked ZIP list
+with map overlays and per-ZIP SHAP attributions; in operational
+use, rankings would be regenerated with each NHC advisory. The FRPI is a relative rank,
+not a probability of need, and all outputs are advisory: no
+resource dispatch is automated, and local knowledge (e.g., aid
+already delivered by another agency) should override the ranking.
 
 \subsection{Ethical Considerations}
-Algorithmic priority systems deployed in humanitarian contexts
-carry inherent risks that warrant explicit acknowledgment. First,
-the FRPI is designed as a \textit{decision-support} tool, not an
-autonomous allocation system; all resource deployment decisions
-should retain a human-in-the-loop review step by trained
-emergency managers familiar with on-the-ground conditions.
-Second, over-reliance on model rankings during active emergency
-operations poses a specific risk: under time pressure,
-coordinators may treat the ranked list as exhaustive and
-deprioritize un-ranked ZIP codes that genuinely need assistance.
-Operational guidelines must explicitly communicate that absence
-from the top-$N$ list is not evidence of safety. Third, while the
-equity audit confirms improved recall for high-SVI communities,
-the model was trained on historical FEMA data that itself
-reflects historical response patterns---which may encode prior
-resource disparities. Periodic re-evaluation of model performance
-against updated FEMA records is essential to detect any emerging
-disparities. Finally, community organizations and local
-governments in affected areas should be consulted when
-operationalizing any algorithmic triage framework to ensure
-contextual validity and equitable implementation.
+Algorithmic priority systems in humanitarian settings carry
+risks. Under time pressure, coordinators may treat the ranked
+list as exhaustive; absence from the top-$N$ list is not evidence
+of safety. The model learns from FEMA records that reflect who
+applied for and received assistance, which may encode historical
+disparities, so the equity audit should be repeated on each new
+season's data. Community organizations and local governments in
+affected areas should be consulted before operational use.
 
 \subsection{Limitations}
 
-\textbf{Temporal Coverage:} ACS 5-year estimates (2021 vintage)
-are held static across all 14 hurricanes; ZIP-code demographic
-conditions in 2016--2018 may differ from the 2021 snapshot.
-
-\textbf{Regression Generalization:} Regression $R^2$ is negative
-for Ida and Idalia, reflecting that diffuse inland flooding
-events are qualitatively different from the coastal-track
-pattern the model predominantly learns. The classifier is more
-robust because its ordinal bins tolerate continuous prediction error.
-
-\textbf{Food Atlas Vintage:} USDA Food Access Research Atlas
-data from 2019 may not reflect food access conditions during
-2021--2024 storms, particularly given the COVID-19-driven
-expansion of SNAP and changes in supermarket footprints.
-
-\textbf{ZIP-Code Aggregation:} ZIP codes are large and
-heterogeneous; block-group or census-tract predictions would
-offer finer targeting but require retraining on matched FEMA data.
-
-\textbf{Class Imbalance:} Despite SMOTE oversampling,
-the Low class dominates the training distribution, suppressing
-Medium-class performance. More aggressive class-weighting
-strategies merit exploration.
-
-\textbf{FEMA Inspection Coverage:} FEMA inspection counts may
-underrepresent damage in remote or low-registration-rate ZIP codes
-where fewer households apply for assistance. The strong Pearson
-correlation ($r > 0.85$) between inspector-verified counts and IHP
-registration counts provides partial mitigation evidence that both
-measures proxy the same underlying damage signal; however, a full
-sensitivity analysis restricting to high-registration-rate ZIPs
-remains future work.
+\textbf{Storm inputs and out-of-range storms:} storm features are
+exact only in hindsight, and static hazard scores do not
+anticipate storms outside the training range, such as Ida's
+extreme damage rates or Helene's inland damage.
+\textbf{Few independent events:} 14 storms, with large
+storm-to-storm variation (Table~\ref{tab:robust}).
+\textbf{Proxy targets:} FEMA inspections measure housing damage,
+not food need, and depend on registration; our food-need check
+uses applicant self-reports, which share that registration bias.
+\textbf{Data vintages:} SVI 2022 and the 2019 Food Access Research
+Atlas are applied to all storms; year-matching the ACS demographics
+did not change discrimination (Section~\ref{sec:robust}), but
+conditions for older and newer storms may still differ.
+\textbf{Aggregation:} ZIP codes are large and heterogeneous;
+tract-level prediction would allow finer targeting.
 
 \subsection{Future Work}
-Future directions include: (1) integrating real-time
-precipitation and soil saturation data to improve
-regression on inland flooding events; (2) extending the
-framework to non-hurricane disasters (tornadoes, wildfires)
-where food-access disruption follows different spatial
-patterns; (3) replacing ZIP-code aggregation with tract-level
-predictions using the full NRI hazard score granularity;
-(4) deploying a live model update loop that ingests FEMA
-inspection data as it arrives and re-ranks priority ZIP codes
-within 24 hours of landfall.
+Future directions include: (1) adding forecast wind-field, rainfall, and
+storm-surge inputs to capture ZIP-level hazard beyond track
+distance; (2) driving the model with
+NHC forecast-track ensembles rather than a single track, so that
+rankings carry their own uncertainty; (3) validating against
+direct food-assistance records (e.g., D-SNAP issuance) where
+ZIP-level data can be obtained; and (4) extending to
+tract-level prediction and non-hurricane hazards.
 
 % ============================================================
 \section{Conclusion}
 \label{sec:conclusion}
 
-We presented an equitable, pre-landfall food relief
-prioritization framework evaluated on 14 Atlantic hurricanes
-spanning nearly a decade. The multi-source analytic base table,
-hurricane-grouped temporal split, and FRPI design represent
-a methodologically sound approach to a high-stakes humanitarian
-resource allocation problem. The XGBoost classifier achieves
-macro ROC-AUC 0.78 and Severe-class recall 0.82 on five
-completely unseen hurricanes, and the FRPI correctly ranks
-the 100\% food-desert, high-vulnerability ZIP codes as
-highest priority---validating that the index captures genuine
-operational need rather than statistical artifact.
-The accompanying Streamlit dashboard, with per-ZIP SHAP
-explanations and Folium priority maps, provides
-deployment-ready situational awareness that requires no ML
-expertise from end users. Code, data pipeline, and dashboard
-are available at
-\url{github.com/aneessaheba/hurricane-food-relief-ml}.
-
-Most critically, the equity audit confirms that predictive
-accuracy is \textit{highest} for the most socially vulnerable
-communities. In a humanitarian deployment context, this is the
-right direction: the framework does not merely avoid harming
-underserved communities---it works \textit{better} for them,
-making it suitable for operationalization by relief organizations
-where equitable resource allocation is both a moral imperative
-and a practical necessity.
+We presented a ZIP-code-level food relief prioritization
+framework evaluated on 14 Atlantic hurricanes. Holding out entire
+storms, the XGBoost classifier reaches a macro ROC-AUC of 0.78 and
+Severe-class recall of 0.80 on five unseen 2021--2024 storms,
+with substantial variation across storms ($0.76\pm0.08$
+leave-one-hurricane-out). Combined with a food-fragility score
+into the FRPI, it places FEMA-verified High or Severe ZIP codes in
+92\% of each storm's top decile and ranks applicant-reported food
+need about as well as damage ($\rho=0.67$), though it does not single
+out communities where food need is most prevalent among affected
+households. Two findings bound its use: its skill depends on knowing the storm
+track, so it is most reliable within about 24\,h of landfall, and
+it struggles on storms outside its training range, such as Ida and
+Helene. The equity audit
+shows the model does not under-detect damage in highly vulnerable
+communities, but because FEMA records may themselves reflect
+unequal registration, it does not establish equitable allocation.
+We offer the FRPI as an interpretable, auditable input to human
+decision-makers. Code, data pipeline, and dashboard are available
+at \url{github.com/aneessaheba/hurricane-food-relief-ml}.
 
 % ============================================================
 \section*{Acknowledgment}
@@ -1073,20 +1032,20 @@ NOAA National Centers for Environmental Information (NCEI),
 [Online]. Available: \url{https://www.ncei.noaa.gov/access/billions/}
 
 \bibitem{coleman_jensen_food}
-A. Coleman-Jensen, M. P. Rabbitt, C. A. Gregory, and A. Singh,
+M. P. Rabbitt, L. J. Hales, M. P. Burke, and A. Coleman-Jensen,
 ``Household Food Security in the United States in 2022,''
-U.S. Department of Agriculture, Economic Research Report
-No. ERR-325, 2023.
+U.S. Department of Agriculture, Economic Research Service,
+Economic Research Report No. ERR-325, 2023.
 
 \bibitem{garney_harvey_food}
-W. R. Garney, P. D. Patterson, K. T. Lowe, and C. K. Evarts,
+L. A. Clay and A. D. Ross,
 ``Factors Associated with Food Insecurity Following Hurricane
 Harvey in Texas,''
 \textit{International Journal of Environmental Research and
-Public Health}, vol. 17, no. 4, p. 1424, 2020.
+Public Health}, vol. 17, no. 3, p. 762, 2020.
 
 \bibitem{broyles_ida_food}
-L. Broyles, E. Bhatt, and T. Vos,
+C. R. Singleton, M. P. Chaparro, K. O'Malley, M. Fuster, and D. Rose,
 ``Emergency food distribution efforts in New Orleans, LA after
 Hurricane Ida,''
 \textit{Frontiers in Public Health}, vol. 10, p. 968552, 2022.
@@ -1114,7 +1073,7 @@ M. Imran, C. Castillo, F. Diaz, and S. Vieweg,
 \textit{ACM Computing Surveys}, vol. 47, no. 4, pp. 1--38, 2015.
 
 \bibitem{hurricane_damage_models}
-R. Merz, B. Kreibich, R. Schwarze, and A. Thieken,
+B. Merz, H. Kreibich, R. Schwarze, and A. Thieken,
 ``Review article: Assessment of economic flood damage,''
 \textit{Natural Hazards and Earth System Sciences},
 vol. 10, no. 8, pp. 1697--1724, 2010.
@@ -1125,17 +1084,11 @@ C. Castillo, M. Mendoza, and B. Poblete,
 in \textit{Proc. 20th Int. Conf. World Wide Web (WWW)},
 Hyderabad, India, 2011, pp. 675--684.
 
-\bibitem{mayer_food_disaster}
-B. Mayer, E. Running, and R. Bergstresser,
-``Disasters, Civil Society Organizations, and Challenges of
-Food Security,''
-\textit{Disasters}, vol. 39, no. 4, pp. 717--739, 2015.
-
 \bibitem{wang_disaster_logistics}
 S. Wang, J. Watada, and W. Pedrycz,
-``Recourse-Based Facility-Location Problems in Fuzzy Environments,''
-\textit{IEEE Trans. Industrial Informatics}, vol. 6, no. 2,
-pp. 196--208, 2010.
+``Recourse-Based Facility-Location Problems in Hybrid Uncertain
+Environment,'' \textit{IEEE Trans. Systems, Man, and Cybernetics,
+Part B}, vol. 40, no. 4, pp. 1176--1187, 2010.
 
 \bibitem{nateghi_power_outage}
 R. Nateghi, S. D. Guikema, and S. M. Quiring,
@@ -1143,12 +1096,32 @@ R. Nateghi, S. D. Guikema, and S. M. Quiring,
 Accuracy with Simpler Models,''
 \textit{Risk Analysis}, vol. 34, no. 6, pp. 1069--1078, 2014.
 
+\bibitem{nguyen_damage_imagery}
+D. T. Nguyen, F. Ofli, M. Imran, and P. Mitra,
+``Damage Assessment from Social Media Imagery Data During
+Disasters,'' in \textit{Proc. IEEE/ACM Int. Conf. Advances in
+Social Networks Analysis and Mining (ASONAM)}, 2017,
+pp. 569--576.
+
+\bibitem{alam_crisismmd}
+F. Alam, F. Ofli, and M. Imran,
+``CrisisMMD: Multimodal Twitter Datasets from Natural
+Disasters,'' in \textit{Proc. 12th Int. AAAI Conf. Web and
+Social Media (ICWSM)}, 2018.
+
 \bibitem{chakraborty_harvey}
-J. Chakraborty, G. A. Collins, and M. Grineski,
+J. Chakraborty, T. W. Collins, and S. E. Grineski,
 ``Exploring the Environmental Justice Implications of Hurricane
 Harvey Flooding in Greater Houston, Texas,''
 \textit{American Journal of Public Health},
 vol. 109, no. 2, pp. 244--250, 2019.
+
+\bibitem{clay_katrina_food}
+L. A. Clay, M. A. Papas, K. B. Gill, and D. M. Abramson,
+``Application of a Theoretical Model Toward Understanding Continued
+Food Insecurity Post Hurricane Katrina,''
+\textit{Disaster Medicine and Public Health Preparedness},
+vol. 12, no. 1, pp. 47--56, 2018.
 
 \bibitem{usda_food_atlas}
 U.S. Department of Agriculture, Economic Research Service,
@@ -1181,11 +1154,40 @@ M. Sameki, H. Wallach, and K. Walker,
 ``Fairlearn: A Toolkit for Assessing and Improving Fairness in
 AI,'' Microsoft Research, Tech. Rep. MSR-TR-2020-32, 2020.
 
+\bibitem{guo_calibration}
+C. Guo, G. Pleiss, Y. Sun, and K. Q. Weinberger,
+``On Calibration of Modern Neural Networks,''
+in \textit{Proc. 34th Int. Conf. Machine Learning (ICML)},
+Sydney, Australia, 2017, pp. 1321--1330.
+
 \bibitem{lundberg_shap}
 S. M. Lundberg and S.-I. Lee,
 ``A Unified Approach to Interpreting Model Predictions,''
 in \textit{Proc. 31st Conf. Neural Information Processing
 Systems (NeurIPS)}, Long Beach, CA, 2017, pp. 4765--4774.
+
+\bibitem{arrieta_xai}
+A. B. Arrieta, N. D\'{i}az-Rodr\'{i}guez, J. Del Ser,
+A. Bennetot, S. Tabik, A. Barbado, S. Garc\'{i}a,
+S. Gil-L\'{o}pez, D. Molina, R. Benjamins, R. Chatila, and
+F. Herrera,
+``Explainable Artificial Intelligence (XAI): Concepts,
+Taxonomies, Opportunities and Challenges toward Responsible AI,''
+\textit{Information Fusion}, vol. 58, pp. 82--115, 2020.
+
+\bibitem{knapp_ibtracs}
+K. R. Knapp, M. C. Kruk, D. H. Levinson, H. J. Diamond,
+and C. J. Neumann,
+``The International Best Track Archive for Climate Stewardship
+(IBTrACS): Unifying Tropical Cyclone Data,''
+\textit{Bulletin of the American Meteorological Society},
+vol. 91, no. 3, pp. 363--376, 2010.
+
+\bibitem{pedregosa_sklearn}
+F. Pedregosa, G. Varoquaux, A. Gramfort, \textit{et al.},
+``Scikit-learn: Machine Learning in Python,''
+\textit{Journal of Machine Learning Research},
+vol. 12, pp. 2825--2830, 2011.
 
 \bibitem{chawla_smote}
 N. V. Chawla, K. W. Bowyer, L. O. Hall, and W. P. Kegelmeyer,
@@ -1199,68 +1201,17 @@ T. Chen and C. Guestrin,
 in \textit{Proc. 22nd ACM SIGKDD Int. Conf. Knowledge Discovery
 and Data Mining}, San Francisco, CA, 2016, pp. 785--794.
 
-\bibitem{optuna}
-T. Akiba, S. Sano, T. Yanase, T. Ohta, and M. Koyama,
-``Optuna: A Next-Generation Hyperparameter Optimization
-Framework,'' in \textit{Proc. 25th ACM SIGKDD Int. Conf.
-Knowledge Discovery and Data Mining}, 2019, pp. 2623--2631.
+\bibitem{frank_hall_ordinal}
+E. Frank and M. Hall,
+``A Simple Approach to Ordinal Classification,''
+in \textit{Proc. 12th European Conf. Machine Learning (ECML)},
+Freiburg, Germany, 2001, pp. 145--156.
 
-\bibitem{pedregosa_sklearn}
-F. Pedregosa, G. Varoquaux, A. Gramfort, \textit{et al.},
-``Scikit-learn: Machine Learning in Python,''
-\textit{Journal of Machine Learning Research},
-vol. 12, pp. 2825--2830, 2011.
-
-\bibitem{knapp_ibtracs}
-K. R. Knapp, M. C. Kruk, D. H. Levinson, H. J. Diamond,
-and C. J. Neumann,
-``The International Best Track Archive for Climate Stewardship
-(IBTrACS): Unifying Tropical Cyclone Data,''
-\textit{Bulletin of the American Meteorological Society},
-vol. 91, no. 3, pp. 363--376, 2010.
-
-\bibitem{nguyen_damage_imagery}
-D. T. Nguyen, F. Ofli, M. Imran, and P. Mitra,
-``Damage Assessment from Social Media Imagery Data During
-Disasters,'' in \textit{Proc. IEEE/ACM Int. Conf. Advances in
-Social Networks Analysis and Mining (ASONAM)}, 2017,
-pp. 569--576.
-
-\bibitem{alam_crisismmd}
-F. Alam, F. Ofli, and M. Imran,
-``CrisisMMD: Multimodal Twitter Datasets from Natural
-Disasters,'' in \textit{Proc. 12th Int. AAAI Conf. Web and
-Social Media (ICWSM)}, 2018.
-
-\bibitem{flanagan_svi_2018}
-B. E. Flanagan, A. D. Hallisey, E. Adams, and A. Lavery,
-``Measuring Community Vulnerability to Natural and Anthropogenic
-Hazards: The Centers for Disease Control and Prevention's Social
-Vulnerability Index,''
-\textit{Journal of Environmental Health}, vol. 80, no. 10,
-pp. 34--36, 2018.
-
-\bibitem{guo_calibration}
-C. Guo, G. Pleiss, Y. Sun, and K. Q. Weinberger,
-``On Calibration of Modern Neural Networks,''
-in \textit{Proc. 34th Int. Conf. Machine Learning (ICML)},
-Sydney, Australia, 2017, pp. 1321--1330.
-
-\bibitem{rajpurkar_chexnext}
-P. Rajpurkar, J. Irvin, K. Ball, K. Zhu, B. Yang, H. Mehta,
-T. Duan, A. Ding, A. Bagul, C. Langlotz, K. Shpanskaya,
-M. P. Lungren, and A. Y. Ng,
-``Deep learning for chest radiograph diagnosis,''
-\textit{PLOS Medicine}, vol. 15, no. 11, 2018.
-
-\bibitem{arrieta_xai}
-A. B. Arrieta, N. D\'{i}az-Rodr\'{i}guez, J. Del Ser,
-A. Bennetot, S. Tabik, A. Barbado, S. Garc\'{i}a,
-S. Gil-L\'{o}pez, D. Molina, R. Benjamins, R. Chatila, and
-F. Herrera,
-``Explainable Artificial Intelligence (XAI): Concepts,
-Taxonomies, Opportunities and Challenges toward Responsible AI,''
-\textit{Information Fusion}, vol. 58, pp. 82--115, 2020.
+\bibitem{nhc_verification}
+National Hurricane Center,
+``Average NHC Atlantic Track and Intensity Forecast Errors,''
+NOAA/NHC Forecast Verification, 2025.
+[Online]. Available: \url{https://www.nhc.noaa.gov/verification/}
 
 \end{thebibliography}
 
