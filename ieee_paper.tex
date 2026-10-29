@@ -84,7 +84,7 @@ are ZIP codes whose FEMA inspection rate was later High or Severe
 applicant-reported food need is 0.67, though that count largely
 mirrors damage. Because the model's skill depends on knowing the storm track,
 we stress-test it with National Hurricane Center-scale forecast
-errors: macro ROC-AUC falls to 0.73 at 24\,h and 0.64 at
+errors: macro ROC-AUC falls to 0.73 at 24\,h and 0.63--0.64 at
 48--72\,h lead time. A Fairlearn audit finds Severe-class recall
 rising from 0.63 in the least to 0.87 in the most socially
 vulnerable quartile; we discuss why this alone does not establish
@@ -714,7 +714,7 @@ All except food-access features (20)       & 0.784 & 0.798 \\
 No storm features (22)                     & 0.556 & 0.676 \\
 \midrule
 Forecast-quality storm inputs, 24\,h       & 0.73$\pm$0.03 & 0.69$\pm$0.06 \\
-\quad 48\,h                                & 0.64$\pm$0.05 & 0.51$\pm$0.13 \\
+\quad 48\,h                                & 0.63$\pm$0.05 & 0.51$\pm$0.13 \\
 \quad 72\,h                                & 0.64$\pm$0.06 & 0.41$\pm$0.15 \\
 \midrule
 Static 2021 ACS (rebuilt)                  & 0.781 & 0.781 \\
@@ -767,7 +767,7 @@ and 161\,km at 24, 48, and 72\,h~\cite{nhc_verification}), perturb
 peak wind by the corresponding intensity error (7--11\,kt), and
 recompute every ZIP's distance to the track (20 draws per lead
 time). Skill degrades quickly (Fig.~\ref{fig:forecast}): macro ROC-AUC is 0.73 at 24\,h and
-0.64 at 48--72\,h, against 0.56 with no storm information at all,
+0.63--0.64 at 48--72\,h, against 0.56 with no storm information at all,
 and only 58\% / 40\% of each storm's FRPI top decile is retained
 at 24 / 48\,h. Training on similarly perturbed tracks stabilizes
 the ranking (81\% retained at 48\,h) but caps ROC-AUC near 0.64
