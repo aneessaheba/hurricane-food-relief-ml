@@ -56,7 +56,7 @@ jupyter lab                                # re-run any notebook against the cac
 ```
 
 The bundle contains:
-- `data/processed/abt.csv` — analytic base table (5,522 zip × hurricane rows)
+- `data/processed/abt.csv` — analytic base table as published (5,522 zip × hurricane rows; see [Two versions of the ABT](#two-versions-of-the-abt))
 - `data/processed/abt_with_clusters.csv` — ABT + K-Means cluster labels
 - `data/processed/abt.xlsx` — color-coded 3-sheet workbook (data + dictionary + summary)
 - `data/interim/fused_zip_hurricane.csv` — pre-feature-engineering fusion
@@ -79,6 +79,32 @@ python scripts/make_share_bundle.py --full     # ~5 GB
 
 Then teammates run `scripts/fetch_share_bundle.py` against the new URL.
 
+## Building the data
+
+```bash
+python -m src.pipeline                   # download -> fuse -> features, skipping finished stages
+python -m src.pipeline --from features   # rebuild the ABT from data/interim/fused_zip_hurricane.csv
+python -m src.validation                 # check the result
+```
+
+The pipeline replaces running notebooks 01, 03 and 04 by hand. It writes `data/interim/fused_zip_hurricane.csv`, then `data/processed/abt_clean.csv` and `abt_dropped_rows.csv`, and refuses to write an ABT that fails validation (duplicate keys, ZIPs outside their record's state, non-positive population, wrong split labels, SVI outside [0, 1], severity classes that disagree with their bins, columns missing from `outputs/data_dictionary.csv`). Logs go to `data/interim/pipeline.log`.
+
+### Two versions of the ABT
+
+| file | what it is | used for |
+|---|---|---|
+| `data/processed/abt.csv` | the ABT as published (version 1, in the share bundle), 5,522 rows | every number in the paper; kept frozen |
+| `data/processed/abt_clean.csv` | built by `src.pipeline`, 5,277 rows | the paper's "mis-keyed ZIPs removed" robustness row and future work |
+
+A data audit found problems in version 1 that the pipeline now fixes:
+
+- 245 rows (4.4%) carry a ZIP code outside the state of their FEMA record (e.g. New York ZIPs on Louisiana Ida records, Puerto Rico ZIPs on the Florida Irma declaration); 231 are Low-damage rows. They are set aside in `abt_dropped_rows.csv`.
+- 251 rows hold the Census not-available code `-666666666` in `median_income`; it is now cleared and state-median imputed.
+- 12 rows had `pct_mobile_homes` above 100% (population denominators in ZIPs with very few residents); shares are now capped at 100%.
+- `tract_to_zip` counted a missing tract value as 0 while keeping its weight, and `impute_missing` zero-filled `snap_participation_pct`. Both are fixed in code; the first only affects tables rebuilt from the raw tract files.
+
+On the corrected table XGBoost's TEST macro ROC-AUC is 0.778 and Severe recall 0.806 (published: 0.784 / 0.797). Logistic regression, which the income code had distorted, edges XGBoost on the development storms (0.697 vs 0.693, within the ±0.09 storm-to-storm spread). The paper reports the pre-specified analysis on version 1 and this check in Table VII.
+
 ## Reproducing the paper
 
 Every table and figure in the paper comes from `scripts/camera_ready_experiments.py`. One command reruns it and checks each number against the committed `outputs/camera_ready/results.json`:
@@ -86,12 +112,13 @@ Every table and figure in the paper comes from `scripts/camera_ready_experiments
 ```bash
 # needs data/processed/abt.csv (share bundle above); --fetch downloads the rest
 export CENSUS_API_KEY="your-key"            # for the year-matched ACS tables
+python -m src.pipeline --from features      # abt_clean.csv, for the `cleaned` stage
 python scripts/reproduce_paper.py --fetch   # all stages, about 5 min after downloads
 python scripts/reproduce_paper.py main loho # selected stages
 python scripts/reproduce_paper.py --check-only
 ```
 
-It validates the ABT, runs the stages, and exits non-zero if any value differs by more than 5e-4 (the paper reports at most three decimals; Random Forest's parallel training jitters some metrics around the sixth decimal). Stages map to the paper as follows:
+It checks that `abt.csv` is byte-for-byte the published ABT, validates `abt_clean.csv`, runs the stages, and exits non-zero if any value differs by more than 5e-4 (the paper reports at most three decimals; Random Forest's parallel training jitters some metrics around the sixth decimal). Stages map to the paper as follows:
 
 | stage | paper |
 |---|---|
@@ -101,22 +128,10 @@ It validates the ABT, runs the stages, and exits non-zero if any value differs b
 | `calibration` | Fig. 1, raw vs isotonic probabilities |
 | `formulation` | multiclass vs ordinal vs regression |
 | `loho`, `zip`, `ablation`, `acs` | Table VII |
+| `cleaned` | Table VII "mis-keyed ZIPs removed" row, Section IV-B "Data cleaning" |
 | `forecast` | Table VII forecast rows, Fig. 3 |
 | `frpi` | Section IV-F (damage capture, food-need validation) |
 | `figures` | Fig. 3 from results.json |
-
-### Data checks
-
-```bash
-python -m src.validation data/processed/abt.csv
-```
-
-reports hard errors (duplicate keys, non-positive population, wrong split labels, SVI outside [0, 1], severity classes that disagree with their bins, columns missing from `outputs/data_dictionary.csv`) and warnings. The published ABT has no errors and these known warnings, left in place so the paper's results stay reproducible:
-
-- 251 rows (4.5%) carry the Census "not available" code `-666666666` in `median_income`.
-- 12 rows have `pct_mobile_homes` above 100% (very small ZIPs; shares use population as the denominator).
-- 40 rows lie more than 1,000 km from the storm track and 15 are outside the storm's declared states, which suggests mis-keyed ZIPs in the FEMA records.
-- `tract_to_zip` counts a missing tract value as 0 while keeping its weight (recorded as an expected-failure test).
 
 ### Tests
 
@@ -165,7 +180,8 @@ hurricane-food-relief/
 │   ├── modeling.py                   ← imblearn Pipeline, tuners, CV
 │   ├── evaluation.py                 ← SHAP helpers, Fairlearn equity audit
 │   ├── priority_index.py             ← fragility scalers, index computation, re-weighting
-│   └── validation.py                 ← ABT data checks + data-dictionary check
+│   ├── validation.py                 ← ABT data checks + data-dictionary check
+│   └── pipeline.py                   ← download -> fuse -> features, one command
 ├── scripts/
 │   ├── fetch_camera_ready_data.py    ← FEMA food-need, year-matched ACS, tracks, ZCTAs
 │   ├── camera_ready_experiments.py   ← every number in the paper
