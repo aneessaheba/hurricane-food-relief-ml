@@ -4,7 +4,9 @@ Data checks for the fused ZIP x hurricane table (ABT).
 `validate_abt` returns a list of `Issue`s. Errors are violations the rest of
 the pipeline relies on (duplicate keys, impossible values, labels that do not
 match their bins); warnings are suspicious values worth a look but not fatal.
-`source_coverage` reports, per storm, how often each feature group has a gap.
+`source_coverage` reports, per storm, how often each feature group has a gap,
+and `check_against_dictionary` keeps the table in step with
+outputs/data_dictionary.csv.
 
 Run against the processed table with:
     python -m src.validation data/processed/abt.csv
@@ -119,6 +121,51 @@ def source_coverage(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+# Dictionary dtype -> numpy dtype kinds that satisfy it.
+_DTYPE_KINDS = {"int": "iu", "float": "fiu", "string": "O", "binary": "biuf"}
+# Columns written by the priority-index step, not stored in the ABT itself.
+_OUTPUT_GROUPS = {"derived_output"}
+
+
+def check_against_dictionary(df: pd.DataFrame, dictionary: pd.DataFrame) -> List[Issue]:
+    """
+    Compare the ABT with outputs/data_dictionary.csv: every ABT column must be
+    documented with a matching dtype, and binary columns must hold only 0/1.
+    Documented columns absent from the ABT are warnings (outputs of later
+    steps are exempt).
+    """
+    issues: List[Issue] = []
+    doc = dictionary.set_index("column")
+    dup = doc.index[doc.index.duplicated()].unique().tolist()
+    if dup:
+        issues.append(Issue("error", "dictionary", f"duplicate entries {dup}"))
+        doc = doc[~doc.index.duplicated()]
+
+    undocumented = [c for c in df.columns if c not in doc.index]
+    if undocumented:
+        issues.append(Issue("error", "dictionary",
+                            f"ABT columns missing from the dictionary: {undocumented}"))
+
+    absent = [c for c, g in doc["group"].items()
+              if c not in df.columns and g not in _OUTPUT_GROUPS]
+    if absent:
+        issues.append(Issue("warning", "dictionary",
+                            f"documented columns not in the ABT: {absent}"))
+
+    for c in df.columns.intersection(doc.index):
+        declared = doc.at[c, "dtype"]
+        kinds = _DTYPE_KINDS.get(declared)
+        if kinds is None:
+            issues.append(Issue("error", "dictionary", f"{c}: unknown dtype {declared!r}"))
+        elif df[c].dtype.kind not in kinds:
+            issues.append(Issue("error", "dictionary",
+                                f"{c}: documented as {declared}, stored as {df[c].dtype}"))
+        elif declared == "binary":
+            _issue(issues, "error", c, ~df[c].isin([0, 1]) & df[c].notna(),
+                   "with a binary value other than 0/1")
+    return issues
+
+
 def assert_valid(df: pd.DataFrame) -> List[Issue]:
     """Raise ValueError on any error-level issue; return the warnings."""
     issues = validate_abt(df)
@@ -132,6 +179,9 @@ if __name__ == "__main__":
     path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("data/processed/abt.csv")
     abt = pd.read_csv(path, dtype={"zip_code": str})
     found = validate_abt(abt)
+    dictionary_path = Path(__file__).resolve().parents[1] / "outputs" / "data_dictionary.csv"
+    if dictionary_path.exists():
+        found += check_against_dictionary(abt, pd.read_csv(dictionary_path))
     for i in found:
         print(i)
     print(f"\n{len(abt):,} rows checked; "

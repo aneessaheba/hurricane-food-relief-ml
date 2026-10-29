@@ -77,3 +77,51 @@ def test_source_coverage_reports_gaps_per_storm(abt):
     assert cov.loc["Ida", "food_access"] == 0.5
     assert cov.loc["Harvey", "food_access"] == 0.0
     assert cov.loc["Ida", "svi"] == 0.0
+
+
+# ---------------------------------------------------------------------------
+# Data dictionary
+# ---------------------------------------------------------------------------
+from pathlib import Path
+
+from src.validation import check_against_dictionary
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def _dictionary(rows):
+    return pd.DataFrame(rows, columns=["column", "group", "dtype", "units", "source", "description"])
+
+
+def test_dictionary_file_parses_with_six_fields():
+    d = pd.read_csv(ROOT / "outputs" / "data_dictionary.csv")
+    assert list(d.columns) == ["column", "group", "dtype", "units", "source", "description"]
+    assert not d["column"].duplicated().any()
+    assert d["description"].notna().all()
+
+
+def test_dictionary_matches_table():
+    df = pd.DataFrame({"zip_code": ["70001"], "population": [10.0], "food_desert_flag": [1.0]})
+    d = _dictionary([
+        ["zip_code", "identifier", "string", "", "", ""],
+        ["population", "demographic", "float", "", "", ""],
+        ["food_desert_flag", "food_access", "binary", "", "", ""],
+        ["priority_rank", "derived_output", "int", "", "", ""],  # later step: exempt
+    ])
+    assert check_against_dictionary(df, d) == []
+
+
+def test_dictionary_flags_undocumented_wrong_type_and_bad_binary():
+    df = pd.DataFrame({"zip_code": ["70001"], "population": ["ten"],
+                       "food_desert_flag": [2.0], "extra": [1]})
+    d = _dictionary([
+        ["zip_code", "identifier", "string", "", "", ""],
+        ["population", "demographic", "float", "", "", ""],
+        ["food_desert_flag", "food_access", "binary", "", "", ""],
+        ["median_income", "demographic", "float", "", "", ""],
+    ])
+    msgs = [str(i) for i in check_against_dictionary(df, d)]
+    assert any("missing from the dictionary: ['extra']" in m for m in msgs)
+    assert any("population: documented as float" in m for m in msgs)
+    assert any("binary value other than 0/1" in m for m in msgs)
+    assert any("[warning]" in m and "median_income" in m for m in msgs)
