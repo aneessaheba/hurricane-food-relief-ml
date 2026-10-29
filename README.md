@@ -4,6 +4,8 @@ Predict how badly each zip code will be damaged by an incoming hurricane — usi
 
 **Team:** Group 2, DATA 245, SJSU.
 
+**Paper:** A. S. Guddi, C. Uppalapati, C. S. Elthuri, M. Kaur, S.-Y. Chang, and S. Shim, "Equitable Pre-Landfall Food Relief Prioritization via Multi-Source Machine Learning: A ZIP-Code Framework Across 14 Atlantic Hurricanes," *IEEE International Conference on Big Data (BigData 2026)*, accepted regular paper (BigD261). LaTeX source: [`ieee_paper.tex`](ieee_paper.tex). See [Reproducing the paper](#reproducing-the-paper).
+
 ---
 
 ## What this project does
@@ -11,8 +13,8 @@ Predict how badly each zip code will be damaged by an incoming hurricane — usi
 1. Pulls FEMA Housing Assistance (Owners + Renters) data for **14 Atlantic-basin hurricanes (2016–2024)**: Matthew, Harvey, Irma, Florence, Michael, Laura, Sally, Delta, Zeta, Ida, Ian, Idalia, Helene, Milton. Every record has been physically inspected by a FEMA inspector — eliminating rejection/fraud noise present in raw IHP registrations.
 2. Joins community vulnerability features (ACS demographics, CDC SVI, USDA Food Access Atlas, SNAP retailers, FEMA NRI hazard scores) with storm characteristics (IBTrACS track, wind, category, geodesic distance-to-track).
 3. Trains a multi-class classifier (Low / Medium / High / Severe damage per 1,000 residents) with a **temporal train / val / test split**: TRAIN=2016–2018 (5 storms), VAL=2020 (4 storms), TEST=2021–2024 (5 storms).
-4. Multiplies `P(High ∪ Severe)` by a 4-component food-fragility score (food desert flag, SNAP retailer density, distance to nearest supermarket, % households without a vehicle) to produce a **Food Relief Priority Index**.
-5. Includes an equity audit (Fairlearn) to verify recall for the Severe class is not lower in high-SVI communities.
+4. Calibrates the classifier's probabilities (isotonic regression fit on VAL) and combines them with a food-fragility score into a **Food Relief Priority Index**: `FRPI = 0.6 · P(High ∪ Severe) + 0.4 · FFS`, where the FFS averages scaled food-desert flag, supermarket distance, SNAP retailer count and density (inverted), SNAP participation and SVI.
+5. Includes an equity audit (Fairlearn) by SVI quartile, plus robustness checks requested by the paper's reviewers: leave-one-hurricane-out and expanding-window evaluation, a ZIP-disjoint control, feature ablation, year-matched ACS data, validation against FEMA applicants' reported food need, and a stress test with National Hurricane Center-scale track forecast errors.
 
 ## Quick start
 
@@ -40,7 +42,7 @@ Teammates who just want to **inspect results, run the dashboard, or re-train on 
 
 ```bash
 # 1. clone + env
-git clone https://github.com/ChaitanyaUppalapati/hurricane-food-relief-ml.git
+git clone https://github.com/aneessaheba/hurricane-food-relief-ml.git
 cd hurricane-food-relief-ml
 python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
@@ -76,6 +78,51 @@ python scripts/make_share_bundle.py --full     # ~5 GB
 ```
 
 Then teammates run `scripts/fetch_share_bundle.py` against the new URL.
+
+## Reproducing the paper
+
+Every table and figure in the paper comes from `scripts/camera_ready_experiments.py`. One command reruns it and checks each number against the committed `outputs/camera_ready/results.json`:
+
+```bash
+# needs data/processed/abt.csv (share bundle above); --fetch downloads the rest
+export CENSUS_API_KEY="your-key"            # for the year-matched ACS tables
+python scripts/reproduce_paper.py --fetch   # all stages, about 5 min after downloads
+python scripts/reproduce_paper.py main loho # selected stages
+python scripts/reproduce_paper.py --check-only
+```
+
+It validates the ABT, runs the stages, and exits non-zero if any value differs by more than 5e-4 (the paper reports at most three decimals; Random Forest's parallel training jitters some metrics around the sixth decimal). Stages map to the paper as follows:
+
+| stage | paper |
+|---|---|
+| `main` | Tables III, V, VI, VIII, IX; Figs. 2, 4; calibration and Brier scores |
+| `binning` | Table IV |
+| `selection` | leave-one-storm-out model selection (Table V, "Dev") |
+| `calibration` | Fig. 1, raw vs isotonic probabilities |
+| `formulation` | multiclass vs ordinal vs regression |
+| `loho`, `zip`, `ablation`, `acs` | Table VII |
+| `forecast` | Table VII forecast rows, Fig. 3 |
+| `frpi` | Section IV-F (damage capture, food-need validation) |
+| `figures` | Fig. 3 from results.json |
+
+### Data checks
+
+```bash
+python -m src.validation data/processed/abt.csv
+```
+
+reports hard errors (duplicate keys, non-positive population, wrong split labels, SVI outside [0, 1], severity classes that disagree with their bins, columns missing from `outputs/data_dictionary.csv`) and warnings. The published ABT has no errors and these known warnings, left in place so the paper's results stay reproducible:
+
+- 251 rows (4.5%) carry the Census "not available" code `-666666666` in `median_income`.
+- 12 rows have `pct_mobile_homes` above 100% (very small ZIPs; shares use population as the denominator).
+- 40 rows lie more than 1,000 km from the storm track and 15 are outside the storm's declared states, which suggests mis-keyed ZIPs in the FEMA records.
+- `tract_to_zip` counts a missing tract value as 0 while keeping its weight (recorded as an expected-failure test).
+
+### Tests
+
+```bash
+pytest
+```
 
 ## Data sources
 
@@ -117,7 +164,14 @@ hurricane-food-relief/
 │   ├── feature_engineering.py        ← target computation, binning, imputation
 │   ├── modeling.py                   ← imblearn Pipeline, tuners, CV
 │   ├── evaluation.py                 ← SHAP helpers, Fairlearn equity audit
-│   └── priority_index.py             ← fragility scalers + index computation
+│   ├── priority_index.py             ← fragility scalers, index computation, re-weighting
+│   └── validation.py                 ← ABT data checks + data-dictionary check
+├── scripts/
+│   ├── fetch_camera_ready_data.py    ← FEMA food-need, year-matched ACS, tracks, ZCTAs
+│   ├── camera_ready_experiments.py   ← every number in the paper
+│   └── reproduce_paper.py            ← rerun + check against committed results
+├── tests/                            ← pytest suite
+├── ieee_paper.tex                    ← IEEE BigData 2026 paper
 ├── data/
 │   ├── raw/ interim/ processed/
 ├── models/                           ← joblib pickles
@@ -134,52 +188,57 @@ streamlit run app/streamlit_app.py
 
 Sidebar controls:
 - **Hurricane**: any of the 5 TEST hurricanes (Ida, Ian, Idalia, Helene, Milton).
-- **Minimum priority score**: 0–1.
-- **Top-N**: number of zips to show.
-- **Food deserts only** / **High-SVI (Q4) only** toggles.
+- **Weight on damage risk**: moves the FRPI between damage risk and food fragility (default 0.6); the table re-ranks and reports how many ZIPs are also in the default top N.
+- **Minimum priority score**, **Top-N**, **Food deserts only**, **High-SVI (Q4) only**.
+- **Forecast lead time**: shows the expected skill and ranking stability at 24, 48 and 72 h before landfall, from the forecast-error stress test. Rankings are most reliable within about 24 h.
 
-The app renders the pre-generated folium choropleth, a sortable table, a per-zip SHAP waterfall, and a CSV download button.
+The app renders the pre-generated folium choropleth (default weighting), a sortable table, per-ZIP SHAP attributions, and a CSV download button. Rankings are advisory; refresh them with each NHC advisory.
 
 ## Key results
 
-Best classifier: **XGBoost**. Best regressor: **Random Forest** (with `log1p` target transform).
+Numbers from the camera-ready paper (`outputs/camera_ready/results.json`). Best classifier: **XGBoost**, chosen by leave-one-storm-out ROC-AUC on the nine TRAIN+VAL storms, with isotonic calibration fit on VAL.
 
 ### Classification on held-out TEST set (5 hurricanes, 2,587 zip × hurricane rows)
 | metric | value |
 |---|---|
 | Accuracy | 0.57 |
-| Weighted F1 | 0.53 |
-| Macro ROC-AUC | **0.78** |
-| Severe-class recall | **0.82** |
-| Low-class F1 | 0.79 |
+| Weighted F1 | 0.54 |
+| Macro ROC-AUC | **0.78** (storm-bootstrap 95% CI 0.71–0.83) |
+| Severe-class recall | **0.80** |
+| Leave-one-hurricane-out macro ROC-AUC (14 storms) | 0.76 ± 0.08 |
 
-### Per-hurricane regression (`verified_damage_per_1000`)
+### Before landfall (forecast-quality storm inputs)
+| lead time | macro ROC-AUC | Severe recall |
+|---|---|---|
+| observed track | 0.78 | 0.80 |
+| 24 h | 0.73 | 0.69 |
+| 48 h | 0.63 | 0.51 |
+| 72 h | 0.64 | 0.41 |
+| no storm features | 0.56 | — |
+
+### Per-hurricane regression (`verified_damage_per_1000`, exploratory)
 | hurricane | RMSE | MAE | R² |
 |---|---|---|---|
-| Milton | 19.4 | 9.4 | **+0.35** |
-| Ian | 48.5 | 20.9 | +0.19 |
-| Idalia | 172.5 | 24.7 | +0.06 |
-| Helene | 48.4 | 30.7 | -0.10 |
-| Ida | 162.5 | 92.9 | -0.18 |
+| Milton | 19.3 | 9.2 | **+0.35** |
+| Ian | 48.9 | 20.6 | +0.17 |
+| Idalia | 172.0 | 24.5 | +0.06 |
+| Helene | 48.1 | 30.3 | -0.09 |
+| Ida | 162.2 | 92.8 | -0.17 |
 
 ### Equity audit by SVI quartile (Fairlearn)
-| quartile | accuracy | F1 | recall (Severe) |
-|---|---|---|---|
-| Q1 (low SVI) | 0.56 | 0.56 | 0.65 |
-| Q2 | 0.56 | 0.51 | 0.83 |
-| Q3 | 0.53 | 0.45 | 0.86 |
-| **Q4 (high SVI)** | **0.63** | 0.55 | **0.89** |
+| quartile | accuracy | recall (Severe) | true Severe rate | predicted Severe rate |
+|---|---|---|---|---|
+| Q1 (low SVI) | 0.56 | 0.63 | 0.22 | 0.27 |
+| Q2 | 0.56 | 0.80 | 0.23 | 0.39 |
+| Q3 | 0.54 | 0.83 | 0.32 | 0.52 |
+| **Q4 (high SVI)** | **0.64** | **0.87** | 0.34 | 0.51 |
 
-Severe-class recall is monotonically higher for more vulnerable communities — the model identifies severely damaged vulnerable zips *better*, in line with the relief-targeting goal.
+Severe recall rises with social vulnerability, but the predicted Severe rate also outpaces the true rate, and FEMA records may reflect unequal registration, so this does not by itself establish equitable allocation.
 
-### Food relief priority index — top-50 vs bottom-50 zips
-| metric | top 50 | bottom 50 |
-|---|---|---|
-| food-desert count | **50 of 50** | 0 of 50 |
-| mean SVI | 0.76 | 0.36 |
-| mean actual damage / 1k residents | **69.2** | 1.6 |
-
-The top-50 priority zips are 100% food deserts, in the 76th percentile of social vulnerability nationally, and experience **43× the actual hurricane damage** of the bottom-50 — providing a strong operational ranking for relief logistics.
+### Food Relief Priority Index
+- Within each TEST storm, 92% of the FRPI top decile are ZIPs with a High or Severe FEMA inspection rate (per-storm base rate 50%); 55% of Severe ZIPs fall in the top quartile.
+- FRPI rank correlation with applicant-reported food need: ρ = 0.67 (that count largely tracks damage, ρ = 0.94).
+- Top 50 at 0.6/0.4: 52% food deserts, 75th SVI percentile, mean damage 73 per 1,000 (TEST mean 34.5). With uncalibrated probabilities the top 50 were 100% food deserts; calibration removed that artifact.
 
 ### Cluster ablation (K-Means)
 With/without the unsupervised cluster_label feature: ≤0.013 weighted-F1 difference across all five classifiers (XGBoost is marginally *better* without it). Conclusion: SVI + demographic features already capture the vulnerability profile that K-Means recovers; the cluster feature is redundant.
@@ -190,7 +249,7 @@ With/without the unsupervised cluster_label feature: ≤0.013 weighted-F1 differ
 2. **pyproj.Geod** for all lat/lon distances. Euclidean on degrees is a bug.
 3. **EPSG:5070** (Albers Equal Area) for every area calculation; EPSG:4326 for lat/lon joins.
 4. CDC SVI uses **-999** as a missing-data sentinel — replace with NaN before any aggregation.
-5. FEMA API caps responses at 10,000 records — must paginate with `$skip` plus retry/backoff.
+5. FEMA API caps responses at 10,000 records — paginate by keyset (`id gt <last id>`, ordered by id), not deep `$skip` offsets, which time out on the large IHP tables; retry with backoff.
 6. Housing Assistance Owners + Renters are aggregated to (disaster, zip) **before** the join, then summed across populations — to avoid Cartesian explosion when zips span multiple counties.
 7. `StratifiedGroupKFold` groups are passed to `.fit()`, not the constructor; n_splits is capped at the number of distinct groups.
 8. Food-fragility MinMaxScalers are fit on TRAIN only, then applied to val/test.
