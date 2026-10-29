@@ -21,6 +21,8 @@ log = logging.getLogger(__name__)
 # ACS publishes "estimate not available" as large negative codes such as
 # -666666666 (median income) or -999999999; anything this low is one of them.
 CENSUS_SENTINEL_MAX = -100_000_000
+# Food-access columns imputed inside the model pipeline rather than zero-filled.
+FOOD_LEFT_MISSING = ("snap_participation_pct",)
 
 
 # -----------------------------------------------------------------------------
@@ -137,12 +139,13 @@ def impute_missing(df: pd.DataFrame) -> pd.DataFrame:
             df[c] = df[c].replace(-999, np.nan)
     df = _state_median_impute(df, svi_cols)
 
-    # Food access: NaN -> 0, plus missing flag
-    food_cols = FEATURE_GROUPS["food_access"]
-    any_missing = df[food_cols].isna().any(axis=1) if set(food_cols).issubset(df.columns) else pd.Series(False, index=df.index)
-    df["food_data_missing"] = any_missing.astype(int)
+    # Food access: NaN -> 0, plus missing flag. snap_participation_pct is left
+    # missing: no Food Atlas tract is not zero SNAP households, so the model
+    # pipeline median-imputes it from the training fold instead.
+    food_cols = [c for c in FEATURE_GROUPS["food_access"] if c in df.columns]
+    df["food_data_missing"] = df[food_cols].isna().any(axis=1).astype(int)
     for c in food_cols:
-        if c in df.columns:
+        if c not in FOOD_LEFT_MISSING:
             df[c] = df[c].fillna(0)
 
     # Flood

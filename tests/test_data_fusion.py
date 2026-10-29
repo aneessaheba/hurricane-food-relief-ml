@@ -143,11 +143,8 @@ def test_tract_to_zip_raises_when_no_tract_matches():
         tract_to_zip(df, cw, tract_col="tract", value_cols=["val"])
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "Known issue: a NaN tract value is summed as 0 but its weight stays in the "
-    "denominator, pulling the ZIP average toward 0. Left as-is because fixing it "
-    "changes the frozen ABT behind the published results."))
 def test_tract_to_zip_ignores_missing_tract_values():
+    # A missing tract value used to count as 0 while keeping its weight.
     df = pd.DataFrame({"tract": ["12019000100", "12019000200"], "val": [100.0, np.nan]})
     cw = pd.DataFrame({"TRACT": ["12019000100", "12019000200"],
                        "ZIP": ["32003", "32003"], "RES_RATIO": [0.5, 0.5]})
@@ -250,3 +247,20 @@ def test_drop_mismatched_zips_splits_rows():
     kept, dropped = drop_mismatched_zips(df)
     assert kept["zip_code"].tolist() == ["70112", "77002"]
     assert dropped["zip_code"].tolist() == ["10466"]
+
+
+def test_merge_housing_assistance_tolerates_missing_bucket_columns():
+    owners = pd.DataFrame([{k: v for k, v in _owners().items()
+                            if k != "femaInspectedDamageBetween20001And30000"}])
+    renters = pd.DataFrame([{k: v for k, v in _renters().items()
+                             if k != "totalWithModerateDamage"}])
+    row = merge_housing_assistance(owners, renters).iloc[0]
+    assert row["total_major_substantial"] == 3  # owner >$30k + renter major + substantial
+    assert row["total_moderate"] == 1
+
+
+def test_tract_to_zip_all_missing_stays_missing():
+    df = pd.DataFrame({"tract": ["12019000100"], "val": [np.nan]})
+    cw = pd.DataFrame({"TRACT": ["12019000100"], "ZIP": ["32003"], "RES_RATIO": [1.0]})
+    out = tract_to_zip(df, cw, tract_col="tract", value_cols=["val"])
+    assert np.isnan(out["val"].iloc[0])

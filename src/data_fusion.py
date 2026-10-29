@@ -57,9 +57,17 @@ def tract_to_zip(
         raise ValueError("tract_to_zip: crosswalk join produced 0 rows — check tract keys.")
 
     def _wavg(g: pd.DataFrame) -> pd.Series:
-        w = g["RES_RATIO"].to_numpy()
-        wsum = w.sum() or 1.0
-        return pd.Series({c: np.nansum(g[c].to_numpy() * w) / wsum for c in value_cols})
+        # Average over the tracts that have a value: a missing tract value must
+        # not count as 0 while its weight stays in the denominator. A ZIP whose
+        # tracts are all missing stays missing.
+        w = g["RES_RATIO"].to_numpy(dtype=float)
+        out = {}
+        for c in value_cols:
+            v = g[c].to_numpy(dtype=float)
+            has = ~np.isnan(v)
+            wsum = w[has].sum()
+            out[c] = np.dot(v[has], w[has]) / wsum if wsum > 0 else np.nan
+        return pd.Series(out)
 
     out = merged.groupby("ZIP", group_keys=True).apply(_wavg, include_groups=False).reset_index()
     out = out.rename(columns={"ZIP": zip_col_out})
@@ -362,23 +370,18 @@ def merge_housing_assistance(
     for c in _SHARED_COUNT_COLS:
         m[c] = _sum(c)
 
+    def _col(name: str) -> pd.Series:
+        # A disaster's table can lack a bucket entirely; treat it as zero.
+        return m[name].fillna(0) if name in m else pd.Series(0.0, index=m.index)
+
     # Severity rollup: sum each bucket that exists in either table
-    owner_major_sub = (m.get(_OWNER_SEVERITY["major"], 0).fillna(0)
-                       + m.get(_OWNER_SEVERITY["substantial"], 0).fillna(0))
-    renter_major_sub = (m.get(_RENTER_SEVERITY["major"], 0).fillna(0)
-                        + m.get(_RENTER_SEVERITY["substantial"], 0).fillna(0))
+    owner_major_sub = _col(_OWNER_SEVERITY["major"]) + _col(_OWNER_SEVERITY["substantial"])
+    renter_major_sub = _col(_RENTER_SEVERITY["major"]) + _col(_RENTER_SEVERITY["substantial"])
     m["total_major_substantial"] = owner_major_sub + renter_major_sub
 
-    owner_no = m.get(_OWNER_SEVERITY["no_damage"], 0).fillna(0)
-    renter_no = m.get(_RENTER_SEVERITY["no_damage"], 0).fillna(0)
-    m["total_no_damage"] = owner_no + renter_no
-
-    owner_moderate = m.get(_OWNER_SEVERITY["moderate"], 0).fillna(0)
-    renter_moderate = m.get(_RENTER_SEVERITY["moderate"], 0).fillna(0)
-    m["total_moderate"] = owner_moderate + renter_moderate
-
-    owner_minor = m.get(_OWNER_SEVERITY["minor"], 0).fillna(0)
-    m["total_minor"] = owner_minor  # renters schema has no minor bucket
+    m["total_no_damage"] = _col(_OWNER_SEVERITY["no_damage"]) + _col(_RENTER_SEVERITY["no_damage"])
+    m["total_moderate"] = _col(_OWNER_SEVERITY["moderate"]) + _col(_RENTER_SEVERITY["moderate"])
+    m["total_minor"] = _col(_OWNER_SEVERITY["minor"])  # renters schema has no minor bucket
 
     # Coalesce state/county identifiers
     for idcol in ("county", "state"):
