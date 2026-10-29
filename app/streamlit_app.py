@@ -11,6 +11,7 @@ Expects the following precomputed artifacts (produced by notebooks 06-08):
 """
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -47,6 +48,21 @@ def load_rankings() -> pd.DataFrame:
 @st.cache_resource
 def load_model():
     return load_model_package(MODELS / "best_classifier.pkl")
+
+
+@st.cache_data
+def load_forecast_skill() -> dict | None:
+    """Skill under NHC-scale forecast error, from the camera-ready stress test."""
+    path = OUT / "camera_ready" / "results.json"
+    if not path.exists():
+        return None
+    results = json.loads(path.read_text())
+    fc = results["forecast"]["observed_train"]
+    test = results["main"]["model_table"]["XGBoost"]["test"]  # headline TEST metrics
+    skill = {"Observed track": {k: {"mean": v} for k, v in test.items()}}
+    for h in (24, 48, 72):
+        skill[f"{h} h before landfall"] = fc[f"monte_carlo_{h}h"]
+    return skill
 
 
 @st.cache_data
@@ -87,6 +103,10 @@ min_score = st.sidebar.slider("Minimum priority score", 0.0, 1.0, 0.0, 0.05)
 top_n = st.sidebar.slider("Top-N zip codes", 10, 100, 25, step=5)
 only_desert = st.sidebar.checkbox("Food deserts only")
 only_q4 = st.sidebar.checkbox("High-SVI (Q4) only")
+skill = load_forecast_skill()
+lead = (st.sidebar.selectbox("Forecast lead time", list(skill), index=1,
+                             help="How far before landfall the storm track is known.")
+        if skill else None)
 
 storm = rerank(df[df["hurricane_name"] == hurricane], weight_risk=risk_weight)
 default_top = set(rerank(storm, DEFAULT_RISK_WEIGHT)
@@ -112,12 +132,35 @@ c2.metric("Predicted High/Severe",
 c3.metric("Food deserts",
           int(sub.get("food_desert_flag", pd.Series([0]*len(sub))).sum()))
 c4.metric("Mean priority", f"{sub['priority_index_norm'].mean():.3f}")
+if "svi_overall" in sub.columns:
+    c5.metric("Mean SVI", f"{sub['svi_overall'].mean():.2f}")
 if risk_weight != DEFAULT_RISK_WEIGHT:
     st.caption(f"{len(set(sub['zip_code']) & default_top)} of these {len(sub)} ZIP codes "
                f"are also in the top {top_n} at the default "
                f"{DEFAULT_RISK_WEIGHT:.1f}/{1 - DEFAULT_RISK_WEIGHT:.1f} weighting.")
-if "svi_overall" in sub.columns:
-    c5.metric("Mean SVI", f"{sub['svi_overall'].mean():.2f}")
+
+# -----------------------------------------------------------------------------
+# Forecast reliability
+# -----------------------------------------------------------------------------
+if lead:
+    s = skill[lead]
+    auc, rec = s["auc_macro"]["mean"], s["recall_severe"]["mean"]
+    if lead == "Observed track":
+        st.info(f"Rankings use the storm's observed track (macro ROC-AUC {auc:.2f}, "
+                f"Severe recall {rec:.2f} on the 2021-2024 test storms). Before landfall "
+                "the track is a forecast; pick a lead time to see the expected loss of skill.")
+    else:
+        kept = s["frpi_top10_overlap"]
+        msg = (f"With NHC-scale track and intensity error {lead}, macro ROC-AUC averages "
+               f"{auc:.2f} and Severe recall {rec:.2f}; about {kept['mean']:.0%} "
+               f"(+/- {kept['std']:.0%}) of each storm's top-10% ZIP codes stay in the "
+               "top 10%. A model with no storm information scores 0.56.")
+        if lead.startswith("24"):
+            st.info(msg + " Rankings are most useful at this range; refresh them "
+                    "with each NHC advisory.")
+        else:
+            st.warning(msg + " Treat the ranking as provisional and refresh it with "
+                       "each NHC advisory.")
 
 st.markdown("---")
 
