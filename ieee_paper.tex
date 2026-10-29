@@ -24,6 +24,11 @@
 \usepackage{textcomp}
 \usepackage{xcolor}
 \usepackage{booktabs}
+\usepackage{array}
+% Let long variable names break after underscores instead of
+% stretching the spaces in justified lines.
+\let\origunderscore\_
+\renewcommand{\_}{\origunderscore\allowbreak}
 \usepackage{multirow}
 \usepackage{url}
 % NOTE: hyperref removed — incompatible with IEEEtran conference class
@@ -41,7 +46,7 @@ A ZIP-Code Framework Across 14 Atlantic Hurricanes}
 \author{
 \IEEEauthorblockN{Anees Saheba Guddi, Chaitanya Uppalapati,
 Chelsi Shulamite Elthuri,\\ Manjot Kaur, Shih-Yu Chang, Simon Shim}
-\IEEEauthorblockA{Department of Applied Data Intelligence,
+\IEEEauthorblockA{Department of Applied Data Science,
 San Jos\'{e} State University, San Jose, CA, USA\\
 \small \{aneessaheba.guddi, chaitanya.uppalapati,
 chelsishulamite.elthuri,\\ manjot.kaur02, shihyu.chang, simon.shim\}@sjsu.edu}
@@ -60,8 +65,9 @@ demographic, and geospatial data sources to prioritize food
 relief before post-event inspection data becomes available. Our
 analytic base table spans 14 Atlantic hurricanes (2016--2024),
 yielding 5,522 ZIP-code$\times$hurricane observations across six
-states. A multi-class XGBoost classifier predicts FEMA-verified
-damage severity (\textit{Low\,/\,Medium\,/\,High\,/\,Severe})
+states. A multi-class XGBoost classifier predicts housing-damage
+severity (\textit{Low\,/\,Medium\,/\,High\,/\,Severe}, measured by
+FEMA inspections per resident)
 from community vulnerability, storm-track geometry, and
 food-access indicators, excluding post-event FEMA inspection
 counts from the inputs. On five held-out storms (Ida, Ian,
@@ -73,8 +79,8 @@ combined with a food-fragility composite---food-desert flags,
 SNAP retailer density, supermarket proximity, and the CDC Social
 Vulnerability Index---into a \textit{Food Relief Priority Index}
 (FRPI). Within each held-out storm, 92\% of the FRPI top decile
-are ZIP codes FEMA later verified as High or Severe damage
-(base rate 50\%), and the FRPI's rank correlation with
+are ZIP codes whose FEMA inspection rate was later High or Severe
+(per-storm base rate 50\%), and the FRPI's rank correlation with
 applicant-reported food need is 0.67, though that count largely
 mirrors damage. Because the model's skill depends on knowing the storm track,
 we stress-test it with National Hurricane Center-scale forecast
@@ -88,6 +94,7 @@ explanations supports human-in-the-loop decisions.
 
 \begin{IEEEkeywords}
 hurricane response, food insecurity, machine learning, XGBoost,
+multi-source data fusion,
 social vulnerability, equity audit, priority index, disaster
 preparedness, ZIP-code prediction, FEMA
 \end{IEEEkeywords}
@@ -241,11 +248,17 @@ hurricane seasons.
 
 \subsection{Data Sources}
 Our analytic base table integrates eight data sources at
-ZIP-code granularity:
+ZIP-code granularity. They arrive at five different spatial units
+(census tract, ZCTA, ZIP code, retailer point, and storm-track
+point) and several release years, and together summarize 2.95
+million FEMA housing inspections; the food-need validation
+(Section~\ref{sec:frpi_val}) adds 2.04 million individual FEMA
+registrations. Reconciling these units and vintages, rather than
+the model itself, is a large part of the engineering effort:
 
 \textbf{1. FEMA Housing Assistance (HA) v2 API:}
 Owners and Renters Housing Assistance records providing FEMA
-inspector-verified damage counts and approved IHP dollar amounts
+inspection counts and approved IHP dollar amounts
 per ZIP code and disaster number. Owners and Renters tables use
 asymmetric damage schemas: owner records use dollar-range buckets
 (\$0, \$1--10k, \$10k--20k, \$20k--30k, \textgreater\$30k) while
@@ -333,7 +346,7 @@ that removing these ZIPs from training leaves results unchanged.
 \centering
 \small
 \setlength{\tabcolsep}{3pt}
-\begin{tabular}{lp{2.3cm}cccp{1.2cm}}
+\begin{tabular}{l>{\raggedright\arraybackslash}p{2.3cm}ccc>{\raggedright\arraybackslash}p{1.2cm}}
 \toprule
 \textbf{Split} & \textbf{Hurricanes} & \textbf{Yrs} & \textbf{N} &
 \textbf{Rows} & \textbf{States} \\
@@ -358,8 +371,8 @@ hurricane observations}.
 
 \textbf{Target Variable:}
 The primary classification target, \texttt{damage\_severity\_class},
-is derived from $\texttt{verified\_damage\_per\_1000} = \texttt{total\_inspected}
-/ \texttt{population} \times 1000$. This rate is binned into four
+is derived from the rate \texttt{verified\_damage\_per\_1000}, computed
+as \texttt{total\_inspected} / \texttt{population} $\times$ 1000. This rate is binned into four
 ordered classes: \textit{Low} ($<2$), \textit{Medium}
 ($2 \leq x < 8$), \textit{High} ($8 \leq x < 25$), and
 \textit{Severe} ($\geq 25$) inspected households per 1,000
@@ -369,7 +382,11 @@ per 40--125) marks substantial but less widespread damage. We model severity as 
 than a continuous rate because relief triage is a tiered
 decision, the rate is extremely right-skewed, and FEMA counts
 are noisy at the low end; Section~\ref{sec:clf_results} compares
-this choice with ordinal and regression formulations.
+this choice with ordinal and regression formulations. The target
+counts households FEMA inspected after registering for assistance,
+so it is a proxy for housing damage, not a direct measure of damage
+or of food need; Section~\ref{sec:frpi_val} tests the index against
+reported food need. Throughout, ``damage'' refers to this rate.
 
 \subsection{Feature Engineering}
 
@@ -391,7 +408,7 @@ training-fold statistics only.
 \label{tab:features}
 \centering
 \small
-\begin{tabular}{lp{5.5cm}}
+\begin{tabular}{l>{\raggedright\arraybackslash}p{5.5cm}}
 \toprule
 \textbf{Group} & \textbf{Features} \\
 \midrule
@@ -502,7 +519,7 @@ Calibrated Probabilities)}
 0.5 / 0.5              & 80\%  & 76th & 92\% & 71.2 \\
 0.0 / 1.0 (FFS only)   & 100\% & 81st & 58\% & 31.0 \\
 \bottomrule
-\multicolumn{5}{l}{\footnotesize TEST base rate of High/Severe: 48\%; mean damage 34.5 per 1k.}\\
+\multicolumn{5}{p{0.94\columnwidth}}{\footnotesize TEST base rate of High/Severe, pooled over storms: 48\%; mean damage 34.5 per 1k.}\\
 \end{tabular}
 \end{table}
 
@@ -657,7 +674,7 @@ rarest in TRAIN (7.6\%) and occupies a transitional damage regime.
 TEST: the multiclass model, an ordinal model (three cumulative
 binary XGBoost models, $P(y>k)$~\cite{frank_hall_ordinal}), and an
 XGBoost regressor on $\log(1+\text{rate})$ binned with the same
-thresholds (the latter two without SMOTE). Their rank correlation with verified damage is
+thresholds (the latter two without SMOTE). Their rank correlation with the damage rate is
 similar ($\rho$ = 0.74, 0.73, 0.71), as is High$\cup$Severe
 ROC-AUC (0.87, 0.88, 0.89), but the regressor recovers far fewer
 Severe ZIPs (recall 0.66 vs.\ 0.80 multiclass and 0.82 ordinal),
@@ -696,7 +713,7 @@ Storm features only (3)                    & 0.705 & 0.606 \\
 All except food-access features (20)       & 0.784 & 0.798 \\
 No storm features (22)                     & 0.556 & 0.676 \\
 \midrule
-Forecast-quality storm inputs, 24\,h       & 0.73$\pm$0.04 & 0.69$\pm$0.06 \\
+Forecast-quality storm inputs, 24\,h       & 0.73$\pm$0.03 & 0.69$\pm$0.06 \\
 \quad 48\,h                                & 0.64$\pm$0.05 & 0.51$\pm$0.13 \\
 \quad 72\,h                                & 0.64$\pm$0.06 & 0.41$\pm$0.15 \\
 \midrule
@@ -896,13 +913,13 @@ We validate the FRPI against outcomes it does not contain,
 within each TEST storm (averaged over the five storms).
 
 \textbf{Damage capture and error propagation.} Within each storm,
-91.6\% of the FRPI top decile are ZIP codes FEMA later verified as
+91.6\% of the FRPI top decile are ZIP codes whose FEMA inspection rate was
 High or Severe (storm base rate 49.8\%), and only 2.4\% are truly
 Low, so the highest-ranked ZIPs are rarely false alarms. Misses are
 the larger risk: only 55\% of truly Severe ZIP codes fall in their
 storm's FRPI top quartile, so a coordinator serving only the top
 quarter would miss nearly half of the most damaged areas. The
-FRPI's rank correlation with verified damage ($\rho=0.68$) is
+FRPI's rank correlation with the damage rate ($\rho=0.68$) is
 essentially that of the damage-risk term alone (0.67), while the
 FFS alone is nearly uncorrelated with damage ($\rho=0.14$); the
 fragility term shifts priority toward food-fragile ZIPs with
@@ -925,7 +942,7 @@ not where it is most \textit{prevalent} among affected households;
 a higher fragility weight would shift this balance at some cost in
 damage capture (Table~\ref{tab:frpi_sens}).
 
-\textbf{IHP registration check.} FEMA inspector-verified counts
+\textbf{IHP registration check.} FEMA inspection counts
 and IHP valid registration counts are strongly correlated
 (Pearson $r=0.91$ across all rows), so the target is not an
 artifact of inspection scheduling, although both share the
@@ -997,7 +1014,7 @@ storms, the XGBoost classifier reaches a macro ROC-AUC of 0.78 and
 Severe-class recall of 0.80 on five unseen 2021--2024 storms,
 with substantial variation across storms ($0.76\pm0.08$
 leave-one-hurricane-out). Combined with a food-fragility score
-into the FRPI, it places FEMA-verified High or Severe ZIP codes in
+into the FRPI, it places ZIP codes with High or Severe FEMA inspection rates in
 92\% of each storm's top decile and ranks applicant-reported food
 need about as well as damage ($\rho=0.67$), though it does not single
 out communities where food need is most prevalent among affected
