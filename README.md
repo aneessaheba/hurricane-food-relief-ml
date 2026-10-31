@@ -4,7 +4,7 @@ Predict how badly each zip code will be damaged by an incoming hurricane — usi
 
 **Team:** Group 2, DATA 245, SJSU.
 
-**Paper:** A. S. Guddi, C. Uppalapati, C. S. Elthuri, M. Kaur, S.-Y. Chang, and S. Shim, "Equitable Pre-Landfall Food Relief Prioritization via Multi-Source Machine Learning: A ZIP-Code Framework Across 14 Atlantic Hurricanes," *IEEE International Conference on Big Data (BigData 2026)*, accepted regular paper (BigD261). LaTeX source: [`ieee_paper.tex`](ieee_paper.tex). See [Reproducing the paper](#reproducing-the-paper).
+**Paper:** A. S. Guddi, C. Uppalapati, C. S. Elthuri, M. Kaur, and S.-Y. Chang, "Equitable Pre-Landfall Food Relief Prioritization via Multi-Source Machine Learning: A ZIP-Code Framework Across 14 Atlantic Hurricanes," *IEEE International Conference on Big Data (BigData 2026)*, accepted regular paper (BigD261). LaTeX source: [`ieee_paper.tex`](ieee_paper.tex). See [Reproducing the paper](#reproducing-the-paper).
 
 ---
 
